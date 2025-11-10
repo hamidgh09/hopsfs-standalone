@@ -54,6 +54,11 @@
             <version>1.15</version>
         </dependency>
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>
@@ -105,6 +110,9 @@
                                     <mainClass>org.hops.Main</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>log4j.properties</resource>
+                                </transformer>
                             </transformers>
                             <filters>
                                 <filter>
@@ -113,6 +121,10 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
+                                        <!-- Exclude log4j2 to avoid conflicts with log4j 1.x -->
+                                        <exclude>org/apache/logging/log4j/core/**</exclude>
+                                        <exclude>org/apache/logging/log4j/util/**</exclude>
+                                        <exclude>Log4j-*</exclude>
                                         <!-- Uncomment to exclude native libraries from JAR -->
                                         <!-- <exclude>**/*.so</exclude> -->
                                         <!-- <exclude>**/*.dll</exclude> -->
