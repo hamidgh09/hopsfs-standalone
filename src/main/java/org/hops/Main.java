@@ -22,13 +22,73 @@ import java.io.IOException;
 public class Main {
   static final Log LOG = LogFactory.getLog(Main.class);
 
+  private static class ClusterConfig {
+    int numDataNodes = 1;
+    int blockSize = 1 * 1024 * 1024;  // 1MB
+    int nameNodePort = 8020;
+  }
+
+  private static ClusterConfig parseCommandLineArgs(String[] args) {
+    ClusterConfig config = new ClusterConfig();
+
+    for (int i = 0; i < args.length; i++) {
+      if (args[i].equals("--num-datanodes") || args[i].equals("-n")) {
+        if (i + 1 < args.length) {
+          config.numDataNodes = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--num-datanodes=")) {
+        config.numDataNodes = Integer.parseInt(args[i].substring("--num-datanodes=".length()));
+      } else if (args[i].equals("--namenode-port") || args[i].equals("-p")) {
+        if (i + 1 < args.length) {
+          config.nameNodePort = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--namenode-port=")) {
+        config.nameNodePort = Integer.parseInt(args[i].substring("--namenode-port=".length()));
+      } else if (args[i].equals("--block-size") || args[i].equals("-b")) {
+        if (i + 1 < args.length) {
+          config.blockSize = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--block-size=")) {
+        config.blockSize = Integer.parseInt(args[i].substring("--block-size=".length()));
+      } else if (args[i].equals("--help") || args[i].equals("-h")) {
+        printUsage();
+        System.exit(0);
+      }
+    }
+
+    return config;
+  }
+
+  private static void printUsage() {
+    System.out.println("HopsFS Standalone Cluster");
+    System.out.println("Usage: java -jar hopsfs-standalone.jar [options]");
+    System.out.println();
+    System.out.println("Options:");
+    System.out.println("  -n, --num-datanodes=N    Number of DataNodes (default: 1)");
+    System.out.println("  -p, --namenode-port=N    NameNode port (default: 8020)");
+    System.out.println("  -b, --block-size=N       Block size in bytes (default: 1048576)");
+    System.out.println("  -h, --help               Show this help message");
+    System.out.println();
+    System.out.println("System Properties:");
+    System.out.println("  -Dcom.mysql.clusterj.connectstring=HOST:PORT");
+    System.out.println("  -Dcom.mysql.clusterj.database=DB_NAME");
+    System.out.println("  -Dio.hops.metadata.ndb.mysqlserver.host=HOST");
+    System.out.println("  -Dio.hops.metadata.ndb.mysqlserver.port=PORT");
+    System.out.println("  -Djava.library.path=/path/to/ndb/lib");
+    System.out.println();
+    System.out.println("Example:");
+    System.out.println("  java -jar hopsfs-standalone.jar --num-datanodes=3 --namenode-port=9000");
+  }
+
   public static void main(String[] args) {
     Logger.getRootLogger().setLevel(Level.INFO);
     MiniDFSCluster cluster = null;
 
-    final int BLKSIZE = 1 * 1024 * 1024;
-    final int NUM_DN = 1;
-    final int NAMENODE_PORT = 8020;
+    ClusterConfig config = parseCommandLineArgs(args);
+
+    final int BLKSIZE = config.blockSize;
+    final int NUM_DN = config.numDataNodes;
+    final int NAMENODE_PORT = config.nameNodePort;
 
     try {
       LOG.info("Starting HopsFS standalone cluster...");
@@ -51,15 +111,6 @@ public class Main {
           .newInstance(fs.getUri(), fs.getConf());
 
       LOG.info("Cluster started successfully!");
-
-      // Add test users and groups
-      LOG.info("Setting up users and groups...");
-      UsersGroups.addUser("gohdfs1");
-      UsersGroups.addUser("gohdfs2");
-      UsersGroups.addGroup("gohdfs1");
-      UsersGroups.addGroup("gohdfs2");
-      UsersGroups.addUserToGroups("gohdfs1", new String[]{"gohdfs1"});
-      UsersGroups.addUserToGroups("gohdfs2", new String[]{"gohdfs2"});
 
       // Set storage policy
       dfs.setStoragePolicy(new Path("/"), "HOT");
