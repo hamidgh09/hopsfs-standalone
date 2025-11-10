@@ -14,24 +14,48 @@
             <artifactId>hadoop-hdfs</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-hdfs</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>test-jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>test-jar</type>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops.metadata</groupId>
@@ -113,6 +137,9 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
                                     <resource>log4j.properties</resource>
                                 </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.XmlAppendingTransformer">
+                                    <resource>log4j2.xml</resource>
+                                </transformer>
                             </transformers>
                             <filters>
                                 <filter>
@@ -121,10 +148,6 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
-                                        <!-- Exclude log4j2 to avoid conflicts with log4j 1.x -->
-                                        <exclude>org/apache/logging/log4j/core/**</exclude>
-                                        <exclude>org/apache/logging/log4j/util/**</exclude>
-                                        <exclude>Log4j-*</exclude>
                                         <!-- Uncomment to exclude native libraries from JAR -->
                                         <!-- <exclude>**/*.so</exclude> -->
                                         <!-- <exclude>**/*.dll</exclude> -->

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <!-- Main application logger -->
+        <Logger name="org.hops" level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+
+        <!-- Hadoop/Hops components - reduce noise -->
+        <Logger name="org.apache.hadoop" level="warn"/>
+        <Logger name="org.apache.hadoop.hdfs" level="info"/>
+        <Logger name="io.hops" level="info"/>
+        <Logger name="org.apache.hadoop.security" level="warn"/>
+        <Logger name="org.apache.hadoop.util" level="warn"/>
+        <Logger name="BlockStateChange" level="warn"/>
+        <Logger name="org.apache.hadoop.hdfs.StateChange" level="warn"/>
+        <Logger name="org.mortbay" level="warn"/>
+        <Logger name="org.eclipse.jetty" level="warn"/>
+
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
