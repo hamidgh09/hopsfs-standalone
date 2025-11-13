@@ -109,6 +109,13 @@ public class Main {
 
     try {
       LOG.info("Starting HopsFS standalone cluster...");
+      LOG.info("Configuration parameters:");
+      LOG.info("  Number of DataNodes: " + NUM_DN);
+      LOG.info("  NameNode port: " + NAMENODE_PORT);
+      LOG.info("  Block size: " + BLKSIZE + " bytes");
+      LOG.info("  Configuration output directory: " + config.confDir);
+      LOG.info("  NDB config file: " + config.ndbConfigFile);
+      LOG.info("  DFS base directory: " + config.dfsBaseDir);
 
       Configuration conf = new HdfsConfiguration();
       conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
