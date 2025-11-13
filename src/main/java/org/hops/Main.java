@@ -26,6 +26,7 @@ public class Main {
     int nameNodePort = 8020;
     String confDir = "/tmp/hopsfs-conf";
     String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
+    String dfsBaseDir = "/tmp/hopsfs-data";  // Default: temporary directory
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -62,6 +63,12 @@ public class Main {
         }
       } else if (args[i].startsWith("--ndb-config=")) {
         config.ndbConfigFile = args[i].substring("--ndb-config=".length());
+      } else if (args[i].equals("--dfs-base-dir")) {
+        if (i + 1 < args.length) {
+          config.dfsBaseDir = args[++i];
+        }
+      } else if (args[i].startsWith("--dfs-base-dir=")) {
+        config.dfsBaseDir = args[i].substring("--dfs-base-dir=".length());
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -81,6 +88,7 @@ public class Main {
     System.out.println("  -b, --block-size=N       Block size in bytes (default: 134217728)");
     System.out.println("  -c, --conf-dir=PATH      Configuration output directory (default: /tmp/hopsfs-conf)");
     System.out.println("  --ndb-config=PATH        NDB configuration file (default: ndb-config.properties)");
+    System.out.println("  --dfs-base-dir=PATH      DFS data directory (default: /tmp/hopsfs-data)");
     System.out.println("  -h, --help               Show this help message");
     System.out.println();
     System.out.println("System Properties:");
@@ -108,6 +116,7 @@ public class Main {
       conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
+      conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
 
       LOG.info("Building MiniDFSCluster...");
       cluster = new MiniDFSCluster.Builder(conf)
