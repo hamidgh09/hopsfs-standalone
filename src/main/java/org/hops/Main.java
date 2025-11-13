@@ -1,6 +1,5 @@
 package org.hops;
 
-import io.hops.security.UsersGroups;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -11,8 +10,6 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,13 +17,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class Main {
-  static {
-    // Set logging properties in static block BEFORE any class initialization
-    System.setProperty("log4j2.StatusLogger.level", "OFF");
-    System.setProperty("org.apache.logging.log4j.simplelog.StatusLogger.level", "OFF");
-    System.setProperty("log4j.configurationFile", "log4j2.xml");
-    System.setProperty("log4j2.configurationFile", "log4j2.xml");
-  }
 
   static final Log LOG = LogFactory.getLog(Main.class);
 
@@ -89,7 +79,6 @@ public class Main {
   }
 
   public static void main(String[] args) {
-    Logger.getRootLogger().setLevel(Level.INFO);
     MiniDFSCluster cluster = null;
 
     ClusterConfig config = parseCommandLineArgs(args);

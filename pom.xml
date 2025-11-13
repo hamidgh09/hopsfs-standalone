@@ -39,11 +39,6 @@
             <version>3.2.0.18-EE-SNAPSHOT</version>
         </dependency>
         <dependency>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-            <version>1.2.17</version>
-        </dependency>
-        <dependency>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
             <version>1.2</version>
@@ -93,6 +88,13 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.5.1</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.logging.log4j</groupId>
+                        <artifactId>log4j-transform-maven-shade-plugin-extensions</artifactId>
+                        <version>0.2.0</version>
+                    </dependency>
+                </dependencies>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -105,6 +107,7 @@
                                     <mainClass>org.hops.Main</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.logging.log4j.maven.plugins.shade.transformer.Log4j2PluginCacheFileTransformer"/>
                             </transformers>
                             <filters>
                                 <filter>
@@ -113,21 +116,11 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
-                                        <!-- Exclude conflicting logging configs from dependencies -->
-                                        <exclude>log4j.properties</exclude>
-                                        <exclude>log4j2.properties</exclude>
                                         <!-- Uncomment to exclude native libraries from JAR -->
                                         <!-- <exclude>**/*.so</exclude> -->
                                         <!-- <exclude>**/*.dll</exclude> -->
                                         <!-- <exclude>**/*.dylib</exclude> -->
                                     </excludes>
-                                </filter>
-                                <!-- Keep our own log4j2.xml -->
-                                <filter>
-                                    <artifact>org.hops:hopsfs-standalone</artifact>
-                                    <includes>
-                                        <include>**</include>
-                                    </includes>
                                 </filter>
                             </filters>
                         </configuration>
