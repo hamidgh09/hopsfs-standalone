@@ -22,8 +22,9 @@ public class Main {
 
   private static class ClusterConfig {
     int numDataNodes = 1;
-    int blockSize = 1 * 1024 * 1024;  // 1MB
+    int blockSize = 128 * 1024 * 1024;  // 128MB
     int nameNodePort = 8020;
+    String confDir = "/tmp/hopsfs-conf";
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -48,6 +49,12 @@ public class Main {
         }
       } else if (args[i].startsWith("--block-size=")) {
         config.blockSize = Integer.parseInt(args[i].substring("--block-size=".length()));
+      } else if (args[i].equals("--conf-dir") || args[i].equals("-c")) {
+        if (i + 1 < args.length) {
+          config.confDir = args[++i];
+        }
+      } else if (args[i].startsWith("--conf-dir=")) {
+        config.confDir = args[i].substring("--conf-dir=".length());
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -65,6 +72,7 @@ public class Main {
     System.out.println("  -n, --num-datanodes=N    Number of DataNodes (default: 1)");
     System.out.println("  -p, --namenode-port=N    NameNode port (default: 8020)");
     System.out.println("  -b, --block-size=N       Block size in bytes (default: 1048576)");
+    System.out.println("  -c, --conf-dir=PATH      Configuration output directory (default: /tmp/hopsfs-conf)");
     System.out.println("  -h, --help               Show this help message");
     System.out.println();
     System.out.println("System Properties:");
@@ -118,13 +126,13 @@ public class Main {
       dfs.setPermission(new Path("/_test"), new FsPermission(0777));
 
       // Write HopsFS configuration files
-      writeHopsFSConfig(cluster);
+      writeHopsFSConfig(cluster, config.confDir);
 
       LOG.info("======================================");
       LOG.info("HopsFS cluster is running!");
       LOG.info("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
       LOG.info("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
-      LOG.info("Configuration written to: /tmp/hopsfs-conf/");
+      LOG.info("Configuration written to: " + config.confDir);
       LOG.info("======================================");
       LOG.info("Press Ctrl+C to shutdown...");
 
@@ -153,9 +161,7 @@ public class Main {
     }
   }
 
-  private static void writeHopsFSConfig(MiniDFSCluster cluster) throws IOException {
-    String confDir = "/tmp/hopsfs-conf";
-
+  private static void writeHopsFSConfig(MiniDFSCluster cluster, String confDir) throws IOException {
     File file = new File(confDir);
     file.mkdirs();
 
