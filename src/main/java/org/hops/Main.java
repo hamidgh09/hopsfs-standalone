@@ -25,6 +25,7 @@ public class Main {
     int blockSize = 128 * 1024 * 1024;  // 128MB
     int nameNodePort = 8020;
     String confDir = "/tmp/hopsfs-conf";
+    String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -55,6 +56,12 @@ public class Main {
         }
       } else if (args[i].startsWith("--conf-dir=")) {
         config.confDir = args[i].substring("--conf-dir=".length());
+      } else if (args[i].equals("--ndb-config")) {
+        if (i + 1 < args.length) {
+          config.ndbConfigFile = args[++i];
+        }
+      } else if (args[i].startsWith("--ndb-config=")) {
+        config.ndbConfigFile = args[i].substring("--ndb-config=".length());
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -71,15 +78,12 @@ public class Main {
     System.out.println("Options:");
     System.out.println("  -n, --num-datanodes=N    Number of DataNodes (default: 1)");
     System.out.println("  -p, --namenode-port=N    NameNode port (default: 8020)");
-    System.out.println("  -b, --block-size=N       Block size in bytes (default: 1048576)");
+    System.out.println("  -b, --block-size=N       Block size in bytes (default: 134217728)");
     System.out.println("  -c, --conf-dir=PATH      Configuration output directory (default: /tmp/hopsfs-conf)");
+    System.out.println("  --ndb-config=PATH        NDB configuration file (default: ndb-config.properties)");
     System.out.println("  -h, --help               Show this help message");
     System.out.println();
     System.out.println("System Properties:");
-    System.out.println("  -Dcom.mysql.clusterj.connectstring=HOST:PORT");
-    System.out.println("  -Dcom.mysql.clusterj.database=DB_NAME");
-    System.out.println("  -Dio.hops.metadata.ndb.mysqlserver.host=HOST");
-    System.out.println("  -Dio.hops.metadata.ndb.mysqlserver.port=PORT");
     System.out.println("  -Djava.library.path=/path/to/ndb/lib");
     System.out.println();
     System.out.println("Example:");
@@ -103,6 +107,7 @@ public class Main {
       conf.setLong(DFSConfigKeys.DFS_NAMENODE_RETRY_CACHE_EXPIRYTIME_MILLIS_KEY, 5000);
       conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
+      conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
 
       LOG.info("Building MiniDFSCluster...");
       cluster = new MiniDFSCluster.Builder(conf)
