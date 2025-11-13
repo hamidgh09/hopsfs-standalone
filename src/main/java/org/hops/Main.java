@@ -20,6 +20,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class Main {
+  static {
+    // Set logging properties in static block BEFORE any class initialization
+    System.setProperty("log4j2.StatusLogger.level", "OFF");
+    System.setProperty("org.apache.logging.log4j.simplelog.StatusLogger.level", "OFF");
+    System.setProperty("log4j.configurationFile", "log4j2.xml");
+    System.setProperty("log4j2.configurationFile", "log4j2.xml");
+  }
+
   static final Log LOG = LogFactory.getLog(Main.class);
 
   private static class ClusterConfig {

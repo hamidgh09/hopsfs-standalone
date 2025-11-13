@@ -14,48 +14,24 @@
             <artifactId>hadoop-hdfs</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-slf4j-impl</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-hdfs</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>test-jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-slf4j-impl</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-slf4j-impl</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.2.0.18-EE-SNAPSHOT</version>
             <type>test-jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-slf4j-impl</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.hops.metadata</groupId>
@@ -76,11 +52,6 @@
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
             <version>1.15</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
-            <version>1.7.36</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -134,12 +105,6 @@
                                     <mainClass>org.hops.Main</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-                                    <resource>log4j.properties</resource>
-                                </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.XmlAppendingTransformer">
-                                    <resource>log4j2.xml</resource>
-                                </transformer>
                             </transformers>
                             <filters>
                                 <filter>
@@ -148,11 +113,21 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
+                                        <!-- Exclude conflicting logging configs from dependencies -->
+                                        <exclude>log4j.properties</exclude>
+                                        <exclude>log4j2.properties</exclude>
                                         <!-- Uncomment to exclude native libraries from JAR -->
                                         <!-- <exclude>**/*.so</exclude> -->
                                         <!-- <exclude>**/*.dll</exclude> -->
                                         <!-- <exclude>**/*.dylib</exclude> -->
                                     </excludes>
+                                </filter>
+                                <!-- Keep our own log4j2.xml -->
+                                <filter>
+                                    <artifact>org.hops:hopsfs-standalone</artifact>
+                                    <includes>
+                                        <include>**</include>
+                                    </includes>
                                 </filter>
                             </filters>
                         </configuration>
