@@ -128,8 +128,8 @@ public class Main {
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
-      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(50));
-      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(50));
+      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(10));
+      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(10));
       conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(5));
 
       LOG.info("Building MiniDFSCluster...");
