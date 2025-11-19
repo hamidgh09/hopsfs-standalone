@@ -16,6 +16,9 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_HANDLER_COUNT_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_HANDLER_COUNT_KEY;
+
 public class Main {
 
   static final Log LOG = LogFactory.getLog(Main.class);
@@ -124,6 +127,8 @@ public class Main {
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
+      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(50));
+      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(50));
 
       LOG.info("Building MiniDFSCluster...");
       cluster = new MiniDFSCluster.Builder(conf)
