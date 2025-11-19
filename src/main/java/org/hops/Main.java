@@ -30,6 +30,7 @@ public class Main {
     String confDir = "/tmp/hopsfs-conf";
     String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
     String dfsBaseDir = "/tmp/hopsfs-data";  // Default: temporary directory
+    String serviceRpcAddress = null;  // Default: not set
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -72,6 +73,12 @@ public class Main {
         }
       } else if (args[i].startsWith("--dfs-base-dir=")) {
         config.dfsBaseDir = args[i].substring("--dfs-base-dir=".length());
+      } else if (args[i].equals("--service-rpc-address")) {
+        if (i + 1 < args.length) {
+          config.serviceRpcAddress = args[++i];
+        }
+      } else if (args[i].startsWith("--service-rpc-address=")) {
+        config.serviceRpcAddress = args[i].substring("--service-rpc-address=".length());
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -86,13 +93,14 @@ public class Main {
     System.out.println("Usage: java -jar hopsfs-standalone.jar [options]");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  -n, --num-datanodes=N    Number of DataNodes (default: 1)");
-    System.out.println("  -p, --namenode-port=N    NameNode port (default: 8020)");
-    System.out.println("  -b, --block-size=N       Block size in bytes (default: 134217728)");
-    System.out.println("  -c, --conf-dir=PATH      Configuration output directory (default: /tmp/hopsfs-conf)");
-    System.out.println("  --ndb-config=PATH        NDB configuration file (default: ndb-config.properties)");
-    System.out.println("  --dfs-base-dir=PATH      DFS data directory (default: /tmp/hopsfs-data)");
-    System.out.println("  -h, --help               Show this help message");
+    System.out.println("  -n, --num-datanodes=N         Number of DataNodes (default: 1)");
+    System.out.println("  -p, --namenode-port=N         NameNode port (default: 8020)");
+    System.out.println("  -b, --block-size=N            Block size in bytes (default: 134217728)");
+    System.out.println("  -c, --conf-dir=PATH           Configuration output directory (default: /tmp/hopsfs-conf)");
+    System.out.println("  --ndb-config=PATH             NDB configuration file (default: ndb-config.properties)");
+    System.out.println("  --dfs-base-dir=PATH           DFS data directory (default: /tmp/hopsfs-data)");
+    System.out.println("  --service-rpc-address=ADDR    Service RPC address (e.g., localhost:8021)");
+    System.out.println("  -h, --help                    Show this help message");
     System.out.println();
     System.out.println("System Properties:");
     System.out.println("  -Djava.library.path=/path/to/ndb/lib");
@@ -119,6 +127,9 @@ public class Main {
       LOG.info("  Configuration output directory: " + config.confDir);
       LOG.info("  NDB config file: " + config.ndbConfigFile);
       LOG.info("  DFS base directory: " + config.dfsBaseDir);
+      if (config.serviceRpcAddress != null) {
+        LOG.info("  Service RPC address: " + config.serviceRpcAddress);
+      }
 
       Configuration conf = new HdfsConfiguration();
       conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
@@ -130,7 +141,10 @@ public class Main {
       conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(10));
       conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(10));
       conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(5));
-      conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, "localhost:8021");
+      if (config.serviceRpcAddress != null) {
+        conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, config.serviceRpcAddress);
+      }
+
       LOG.info("Building MiniDFSCluster...");
       cluster = new MiniDFSCluster.Builder(conf)
           .nameNodePort(NAMENODE_PORT)
