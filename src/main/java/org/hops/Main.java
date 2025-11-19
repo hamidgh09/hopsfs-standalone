@@ -17,8 +17,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_KEY;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_HANDLER_COUNT_KEY;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_HANDLER_COUNT_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
 public class Main {
 
@@ -131,7 +130,7 @@ public class Main {
       conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(10));
       conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(10));
       conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(5));
-
+      conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, "localhost:8021");
       LOG.info("Building MiniDFSCluster...");
       cluster = new MiniDFSCluster.Builder(conf)
           .nameNodePort(NAMENODE_PORT)
