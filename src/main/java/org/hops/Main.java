@@ -3,18 +3,17 @@ package org.hops;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CloudProvider;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProvider;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProviderFactory;
+import org.apache.hadoop.io.IOUtils;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
@@ -25,13 +24,10 @@ public class Main {
 
   private static class ClusterConfig {
     int numDataNodes = 1;
-    int blockSize = 128 * 1024 * 1024;  // 128MB
     int nameNodePort = 8020;
     String confDir = "/tmp/hopsfs-conf";
     String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
     String dfsBaseDir = "/tmp/hopsfs-data";  // Default: temporary directory
-    String serviceRpcAddress = null;  // Default: not set
-    Integer ipcServerRpcReadThreads = null;  // Default: not set
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -50,13 +46,7 @@ public class Main {
         }
       } else if (args[i].startsWith("--namenode-port=")) {
         config.nameNodePort = Integer.parseInt(args[i].substring("--namenode-port=".length()));
-      } else if (args[i].equals("--block-size") || args[i].equals("-b")) {
-        if (i + 1 < args.length) {
-          config.blockSize = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--block-size=")) {
-        config.blockSize = Integer.parseInt(args[i].substring("--block-size=".length()));
-      } else if (args[i].equals("--conf-dir") || args[i].equals("-c")) {
+      }  else if (args[i].equals("--conf-dir") || args[i].equals("-c")) {
         if (i + 1 < args.length) {
           config.confDir = args[++i];
         }
@@ -74,18 +64,6 @@ public class Main {
         }
       } else if (args[i].startsWith("--dfs-base-dir=")) {
         config.dfsBaseDir = args[i].substring("--dfs-base-dir=".length());
-      } else if (args[i].equals("--service-rpc-address")) {
-        if (i + 1 < args.length) {
-          config.serviceRpcAddress = args[++i];
-        }
-      } else if (args[i].startsWith("--service-rpc-address=")) {
-        config.serviceRpcAddress = args[i].substring("--service-rpc-address=".length());
-      } else if (args[i].equals("--ipc-server-rpc-read-threads")) {
-        if (i + 1 < args.length) {
-          config.ipcServerRpcReadThreads = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--ipc-server-rpc-read-threads=")) {
-        config.ipcServerRpcReadThreads = Integer.parseInt(args[i].substring("--ipc-server-rpc-read-threads=".length()));
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -102,12 +80,9 @@ public class Main {
     System.out.println("Options:");
     System.out.println("  -n, --num-datanodes=N                Number of DataNodes (default: 1)");
     System.out.println("  -p, --namenode-port=N                NameNode port (default: 8020)");
-    System.out.println("  -b, --block-size=N                   Block size in bytes (default: 134217728)");
     System.out.println("  -c, --conf-dir=PATH                  Configuration output directory (default: /tmp/hopsfs-conf)");
     System.out.println("  --ndb-config=PATH                    NDB configuration file (default: ndb-config.properties)");
     System.out.println("  --dfs-base-dir=PATH                  DFS data directory (default: /tmp/hopsfs-data)");
-    System.out.println("  --service-rpc-address=ADDR           Service RPC address (e.g., localhost:8021)");
-    System.out.println("  --ipc-server-rpc-read-threads=N      IPC server RPC read threads");
     System.out.println("  -h, --help                           Show this help message");
     System.out.println();
     System.out.println("System Properties:");
@@ -122,7 +97,6 @@ public class Main {
 
     ClusterConfig config = parseCommandLineArgs(args);
 
-    final int BLKSIZE = config.blockSize;
     final int NUM_DN = config.numDataNodes;
     final int NAMENODE_PORT = config.nameNodePort;
 
@@ -131,53 +105,79 @@ public class Main {
       LOG.info("Configuration parameters:");
       LOG.info("  Number of DataNodes: " + NUM_DN);
       LOG.info("  NameNode port: " + NAMENODE_PORT);
-      LOG.info("  Block size: " + BLKSIZE + " bytes");
       LOG.info("  Configuration output directory: " + config.confDir);
       LOG.info("  NDB config file: " + config.ndbConfigFile);
       LOG.info("  DFS base directory: " + config.dfsBaseDir);
-      if (config.serviceRpcAddress != null) {
-        LOG.info("  Service RPC address: " + config.serviceRpcAddress);
-      }
-      if (config.ipcServerRpcReadThreads != null) {
-        LOG.info("  IPC server RPC read threads: " + config.ipcServerRpcReadThreads);
-      }
 
       Configuration conf = new HdfsConfiguration();
-      conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
-      conf.setLong(DFSConfigKeys.DFS_NAMENODE_RETRY_CACHE_EXPIRYTIME_MILLIS_KEY, 5000);
+      conf.addResource("hopsfs-site.xml");
+
+      String bucket = "";
+      boolean cloudEnabled = false;
+      if (conf.getBoolean(DFS_ENABLE_CLOUD_PERSISTENCE, DFS_ENABLE_CLOUD_PERSISTENCE_DEFAULT)) {
+        cloudEnabled = true;
+        if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.AZURE.name()) == 0) {
+          bucket = conf.get(DFSConfigKeys.AZURE_CONTAINER_KEY);
+        } else if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.AWS.name()) == 0) {
+          bucket = conf.get(DFSConfigKeys.S3_BUCKET_KEY);
+        } else if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.GCS.name()) == 0) {
+          bucket = conf.get(DFSConfigKeys.GCS_BUCKET_KEY);
+        } else {
+          throw new RuntimeException("Cloud provider not supported");
+        }
+
+        CloudPersistenceProvider cloud = CloudPersistenceProviderFactory.getCloudClient(conf);
+        cloud.deleteAllBuckets(bucket);
+        cloud.createBucket(bucket.toLowerCase());
+        cloud.shutdown();
+      }
+
       conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
-      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(10));
-      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(10));
-      if (config.ipcServerRpcReadThreads != null) {
-        conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(config.ipcServerRpcReadThreads));
-      }
-      if (config.serviceRpcAddress != null) {
-        conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, config.serviceRpcAddress);
-      }
 
       LOG.info("Building MiniDFSCluster...");
-      cluster = new MiniDFSCluster.Builder(conf)
-          .nameNodePort(NAMENODE_PORT)
-          .numDataNodes(NUM_DN)
-          .format(true)
-          .build();
+      MiniDFSCluster.Builder clusterBuilder = new MiniDFSCluster.Builder(conf)
+              .nameNodePort(NAMENODE_PORT)
+              .numDataNodes(NUM_DN);
+      if (cloudEnabled) {
+        clusterBuilder.storageTypes(CloudTestHelper.genStorageTypes(NUM_DN));
+      }
+
+      clusterBuilder = clusterBuilder.format(true);
+      cluster = clusterBuilder.build();
 
       FileSystem fs = cluster.getFileSystem(0);
       DistributedFileSystem dfs = (DistributedFileSystem) FileSystem
-          .newInstance(fs.getUri(), fs.getConf());
+              .newInstance(fs.getUri(), fs.getConf());
 
       LOG.info("Cluster started successfully!");
 
-      // Set storage policy
-      dfs.setStoragePolicy(new Path("/"), "HOT");
+      if (cloudEnabled) {
+        dfs.setStoragePolicy(new Path("/"), "CLOUD");
+      } else {
+        dfs.setStoragePolicy(new Path("/"), "HOT");
+      }
 
-      // Create test directory
-      LOG.info("Creating test directory /_test...");
-      dfs.mkdirs(new Path("/_test"), new FsPermission(0777));
-      dfs.setPermission(new Path("/_test"), new FsPermission(0777));
+
+      if (conf.getBoolean("create.test.data", false)) {
+
+        dfs.mkdirs(new Path("/_test"), new FsPermission(0777));
+        dfs.setPermission(new Path("/_test"), new FsPermission(0777));
+
+        InputStream in = Main.class.getClassLoader().getResourceAsStream("foo.txt");
+        FSDataOutputStream out = dfs.create(new Path("/_test/foo.txt"));
+        IOUtils.copyBytes(in, out, 1024);
+        in.close();
+        out.close();
+
+        in = Main.class.getClassLoader().getResourceAsStream("mobydick.txt");
+        out = dfs.create(new Path("/_test/mobydick.txt"), false, 1024, (short) 3, 1024 * 1024);
+        IOUtils.copyBytes(in, out, 1024);
+        in.close();
+        out.close();
+      }
 
       // Write HopsFS configuration files
       writeHopsFSConfig(cluster, config.confDir);
@@ -220,7 +220,7 @@ public class Main {
     file.mkdirs();
 
     cluster.getConfiguration(0).set("fs.defaultFS",
-        "hdfs://" + cluster.getNameNode(0).getHostAndPort());
+            "hdfs://" + cluster.getNameNode(0).getHostAndPort());
 
     FileOutputStream os = new FileOutputStream(confDir + "/hdfs-site.xml");
     cluster.getConfiguration(0).writeXml(os);
