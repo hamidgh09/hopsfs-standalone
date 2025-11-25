@@ -24,6 +24,7 @@ public class Main {
 
   private static class ClusterConfig {
     int numDataNodes = 1;
+    int numNameNodes = 1;
     int nameNodePort = 8020;
     String confDir = "/tmp/hopsfs-conf";
     String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
@@ -34,12 +35,18 @@ public class Main {
     ClusterConfig config = new ClusterConfig();
 
     for (int i = 0; i < args.length; i++) {
-      if (args[i].equals("--num-datanodes") || args[i].equals("-n")) {
+      if (args[i].equals("--num-datanodes")) {
         if (i + 1 < args.length) {
           config.numDataNodes = Integer.parseInt(args[++i]);
         }
       } else if (args[i].startsWith("--num-datanodes=")) {
         config.numDataNodes = Integer.parseInt(args[i].substring("--num-datanodes=".length()));
+      }if (args[i].equals("--num-namenodes")) {
+        if (i + 1 < args.length) {
+          config.numNameNodes = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--num-namenodes=")) {
+        config.numNameNodes = Integer.parseInt(args[i].substring("--num-namenodes=".length()));
       } else if (args[i].equals("--namenode-port") || args[i].equals("-p")) {
         if (i + 1 < args.length) {
           config.nameNodePort = Integer.parseInt(args[++i]);
@@ -78,7 +85,8 @@ public class Main {
     System.out.println("Usage: java -jar hopsfs-standalone.jar [options]");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  -n, --num-datanodes=N                Number of DataNodes (default: 1)");
+    System.out.println("  --num-datanodes=N                Number of DataNodes (default: 1)");
+    System.out.println("  --num-namenodes=N                Number of NameNodes (default: 1)");
     System.out.println("  -p, --namenode-port=N                NameNode port (default: 8020)");
     System.out.println("  -c, --conf-dir=PATH                  Configuration output directory (default: /tmp/hopsfs-conf)");
     System.out.println("  --ndb-config=PATH                    NDB configuration file (default: ndb-config.properties)");
@@ -139,11 +147,15 @@ public class Main {
 
       LOG.info("Building MiniDFSCluster...");
       MiniDFSCluster.Builder clusterBuilder = new MiniDFSCluster.Builder(conf)
-              .nameNodePort(NAMENODE_PORT)
               .numDataNodes(NUM_DN);
       if (cloudEnabled) {
         clusterBuilder.storageTypes(CloudTestHelper.genStorageTypes(NUM_DN));
       }
+
+      // Set up NN topology with ports: first NN uses NAMENODE_PORT, others use 0
+      int[] ipcPorts = new int[config.numNameNodes];
+      ipcPorts[0] = NAMENODE_PORT;
+      clusterBuilder.nnTopology(MiniDFSNNTopology.simpleHOPSTopology(config.numNameNodes, ipcPorts));
 
       clusterBuilder = clusterBuilder.format(true);
       cluster = clusterBuilder.build();
