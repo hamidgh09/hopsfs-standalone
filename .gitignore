@@ -36,3 +36,8 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# custom resources
+log4j2.properties
+ndb-config.properties
+run
