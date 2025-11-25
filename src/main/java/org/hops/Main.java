@@ -15,7 +15,6 @@ import org.apache.hadoop.io.IOUtils;
 
 import java.io.*;
 
-import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
 public class Main {
@@ -41,19 +40,19 @@ public class Main {
         }
       } else if (args[i].startsWith("--num-datanodes=")) {
         config.numDataNodes = Integer.parseInt(args[i].substring("--num-datanodes=".length()));
-      }if (args[i].equals("--num-namenodes")) {
+      } else if (args[i].equals("--num-namenodes")) {
         if (i + 1 < args.length) {
           config.numNameNodes = Integer.parseInt(args[++i]);
         }
       } else if (args[i].startsWith("--num-namenodes=")) {
         config.numNameNodes = Integer.parseInt(args[i].substring("--num-namenodes=".length()));
-      } else if (args[i].equals("--namenode-port") || args[i].equals("-p")) {
+      } else if (args[i].equals("--namenode-port")) {
         if (i + 1 < args.length) {
           config.nameNodePort = Integer.parseInt(args[++i]);
         }
       } else if (args[i].startsWith("--namenode-port=")) {
         config.nameNodePort = Integer.parseInt(args[i].substring("--namenode-port=".length()));
-      }  else if (args[i].equals("--conf-dir") || args[i].equals("-c")) {
+      } else if (args[i].equals("--conf-dir")) {
         if (i + 1 < args.length) {
           config.confDir = args[++i];
         }
@@ -85,13 +84,13 @@ public class Main {
     System.out.println("Usage: java -jar hopsfs-standalone.jar [options]");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  --num-datanodes=N                Number of DataNodes (default: 1)");
-    System.out.println("  --num-namenodes=N                Number of NameNodes (default: 1)");
-    System.out.println("  -p, --namenode-port=N                NameNode port (default: 8020)");
-    System.out.println("  -c, --conf-dir=PATH                  Configuration output directory (default: /tmp/hopsfs-conf)");
-    System.out.println("  --ndb-config=PATH                    NDB configuration file (default: ndb-config.properties)");
-    System.out.println("  --dfs-base-dir=PATH                  DFS data directory (default: /tmp/hopsfs-data)");
-    System.out.println("  -h, --help                           Show this help message");
+    System.out.println("  --num-datanodes=N       Number of DataNodes (default: 1)");
+    System.out.println("  --num-namenodes=N       Number of NameNodes (default: 1)");
+    System.out.println("  --namenode-port=N       NameNode port (default: 8020)");
+    System.out.println("  --conf-dir=PATH         Configuration output directory (default: /tmp/hopsfs-conf)");
+    System.out.println("  --ndb-config=PATH       NDB configuration file (default: ndb-config.properties)");
+    System.out.println("  --dfs-base-dir=PATH     DFS data directory (default: /tmp/hopsfs-data)");
+    System.out.println("  -h, --help              Show this help message");
     System.out.println();
     System.out.println("System Properties:");
     System.out.println("  -Djava.library.path=/path/to/ndb/lib");
@@ -105,6 +104,15 @@ public class Main {
 
     ClusterConfig config = parseCommandLineArgs(args);
 
+    if (config.numNameNodes < 1) {
+      LOG.error("Number of NameNodes must be at least 1");
+      System.exit(1);
+    }
+    if (config.numDataNodes < 1) {
+      LOG.error("Number of DataNodes must be at least 1");
+      System.exit(1);
+    }
+
     final int NUM_DN = config.numDataNodes;
     final int NAMENODE_PORT = config.nameNodePort;
 
@@ -112,6 +120,7 @@ public class Main {
       LOG.info("Starting HopsFS standalone cluster...");
       LOG.info("Configuration parameters:");
       LOG.info("  Number of DataNodes: " + NUM_DN);
+      LOG.info("  Number of NameNodes: " + config.numNameNodes);
       LOG.info("  NameNode port: " + NAMENODE_PORT);
       LOG.info("  Configuration output directory: " + config.confDir);
       LOG.info("  NDB config file: " + config.ndbConfigFile);
@@ -124,14 +133,21 @@ public class Main {
       boolean cloudEnabled = false;
       if (conf.getBoolean(DFS_ENABLE_CLOUD_PERSISTENCE, DFS_ENABLE_CLOUD_PERSISTENCE_DEFAULT)) {
         cloudEnabled = true;
-        if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.AZURE.name()) == 0) {
+        String cloudProvider = conf.get(DFS_CLOUD_PROVIDER);
+        if (cloudProvider == null) {
+          throw new RuntimeException("Cloud persistence enabled but DFS_CLOUD_PROVIDER not set");
+        }
+        if (cloudProvider.equalsIgnoreCase(CloudProvider.AZURE.name())) {
           bucket = conf.get(DFSConfigKeys.AZURE_CONTAINER_KEY);
-        } else if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.AWS.name()) == 0) {
+        } else if (cloudProvider.equalsIgnoreCase(CloudProvider.AWS.name())) {
           bucket = conf.get(DFSConfigKeys.S3_BUCKET_KEY);
-        } else if (conf.get(DFS_CLOUD_PROVIDER).compareToIgnoreCase(CloudProvider.GCS.name()) == 0) {
+        } else if (cloudProvider.equalsIgnoreCase(CloudProvider.GCS.name())) {
           bucket = conf.get(DFSConfigKeys.GCS_BUCKET_KEY);
         } else {
-          throw new RuntimeException("Cloud provider not supported");
+          throw new RuntimeException("Cloud provider not supported: " + cloudProvider);
+        }
+        if (bucket == null || bucket.isEmpty()) {
+          throw new RuntimeException("Bucket not configured for cloud provider: " + cloudProvider);
         }
 
         CloudPersistenceProvider cloud = CloudPersistenceProviderFactory.getCloudClient(conf);
@@ -179,38 +195,37 @@ public class Main {
         dfs.setPermission(new Path("/_test"), new FsPermission(0777));
 
         InputStream in = Main.class.getClassLoader().getResourceAsStream("foo.txt");
+        if (in == null) {
+          throw new RuntimeException("Resource not found: foo.txt");
+        }
         FSDataOutputStream out = dfs.create(new Path("/_test/foo.txt"));
         IOUtils.copyBytes(in, out, 1024);
         in.close();
         out.close();
 
         in = Main.class.getClassLoader().getResourceAsStream("mobydick.txt");
-        out = dfs.create(new Path("/_test/mobydick.txt"), false, 1024, (short) 3, 1024 * 1024);
+        if (in == null) {
+          throw new RuntimeException("Resource not found: mobydick.txt");
+        }
+        out = dfs.create(new Path("/_test/mobydick.txt"),
+                false, 1024, (short) 3, 1024 * 1024);
         IOUtils.copyBytes(in, out, 1024);
         in.close();
         out.close();
       }
 
+      dfs.close();
+
       // Write HopsFS configuration files
       writeHopsFSConfig(cluster, config.confDir);
 
-      LOG.info("======================================");
+      LOG.info("================================================================================");
       LOG.info("HopsFS cluster is running!");
       LOG.info("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
       LOG.info("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
       LOG.info("Configuration written to: " + config.confDir);
-      LOG.info("======================================");
+      LOG.info("================================================================================");
       LOG.info("Press Ctrl+C to shutdown...");
-
-      // Add shutdown hook
-      final MiniDFSCluster finalCluster = cluster;
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-        LOG.info("Shutting down cluster...");
-        if (finalCluster != null) {
-          finalCluster.shutdown();
-        }
-        LOG.info("Cluster shutdown complete.");
-      }));
 
       // Keep the cluster running
       Thread.sleep(Long.MAX_VALUE);
@@ -235,12 +250,18 @@ public class Main {
             "hdfs://" + cluster.getNameNode(0).getHostAndPort());
 
     FileOutputStream os = new FileOutputStream(confDir + "/hdfs-site.xml");
-    cluster.getConfiguration(0).writeXml(os);
-    os.close();
+    try {
+      cluster.getConfiguration(0).writeXml(os);
+    } finally {
+      os.close();
+    }
 
     FileWriter writer = new FileWriter(confDir + "/hopsfs-uri.txt");
-    writer.write(cluster.getNameNode(0).getHostAndPort());
-    writer.close();
+    try {
+      writer.write(cluster.getNameNode(0).getHostAndPort());
+    } finally {
+      writer.close();
+    }
 
     LOG.info("Configuration files written to " + confDir);
   }
