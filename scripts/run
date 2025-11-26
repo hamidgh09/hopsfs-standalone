@@ -1,27 +1,47 @@
 #!/bin/bash
 #set -x
-DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-cd "$DIR"
+SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+PROJECT_DIR="$SCRIPT_DIR/.."
+cd "$PROJECT_DIR"
 
 # Override JAVA_HOME if needed
- export JAVA_HOME="${HOME}/usr/bin/jdk_for_hadoop"
- export PATH="${JAVA_HOME}/bin:$PATH"
+export JAVA_HOME="${HOME}/usr/bin/jdk_for_hadoop"
+export PATH="${JAVA_HOME}/bin:$PATH"
+
+# Check Java version (must be <= 11)
+JAVA_VERSION=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
+if [ "$JAVA_VERSION" -gt 11 ]; then
+    echo "Error: Java version must be <= 11, found Java $JAVA_VERSION"
+    exit 1
+fi
+
+
+# minio config params. 
+export AWS_ACCESS_KEY_ID="minioadmin"
+export AWS_SECRET_ACCESS_KEY="minioadmin"
 
 # Directory containing ndb-config.properties and hopsfs-site.xml (added to classpath)
-HOPSFS_CONF_DIR="$DIR"
+HOPSFS_CONF_DIR="$SCRIPT_DIR"
 
 # Output directory for runtime data
 HOPSFS_OUTPUT_DIR=/tmp/hopsfs
 
-LOG_FILE="$DIR/hopsfs.log"
+LOG_FILE="$PROJECT_DIR/hopsfs.log"
 
 rm -rf "$HOPSFS_OUTPUT_DIR"
 rm -f "$LOG_FILE"
 
 export AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT=true
 
+JAR_FILE="$PROJECT_DIR/target/hopsfs-standalone-1.0-SNAPSHOT.jar"
+if [ ! -f "$JAR_FILE" ]; then
+    echo "Error: JAR file not found: $JAR_FILE"
+    echo "Run 'mvn package' to build the project first."
+    exit 1
+fi
+
 # Run java in background, write to log file
-java -cp "$HOPSFS_CONF_DIR:target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main \
+java -cp "$HOPSFS_CONF_DIR:$JAR_FILE" org.hops.Main \
     --conf-dir="$HOPSFS_OUTPUT_DIR/conf" \
     --dfs-base-dir="$HOPSFS_OUTPUT_DIR/data" \
     --num-namenodes=1 \
@@ -46,7 +66,7 @@ if [ "$(uname)" = "Linux" ]; then
         # Pause tail to allow gen-certs prompts (sudo) to be visible
         kill $TAIL_PID 2>/dev/null
         # gen-certs extracts private key, root CA, and client cert from JKS keystores
-        "$DIR/gen-certs" "$HOPSFS_OUTPUT_DIR/conf/certs"
+        "$SCRIPT_DIR/gen-certs" "$HOPSFS_OUTPUT_DIR/conf/certs"
         # Resume tailing
         tail -f "$LOG_FILE" &
         TAIL_PID=$!

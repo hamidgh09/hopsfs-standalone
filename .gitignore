@@ -38,8 +38,7 @@ build/
 .DS_Store
 
 # custom resources
-log4j2.properties
-ndb-config.properties
-hopsfs-site.xml
 hopsfs.log
+scripts/minio-data
+minio.img
 
