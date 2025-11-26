@@ -42,20 +42,23 @@ java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar --num-datanodes=3 --namenode
   --num-namenodes=N       Number of NameNodes (default: 1)
   --namenode-port=N       NameNode port (default: 8020)
   --conf-dir=PATH         Configuration output directory (default: /tmp/hopsfs-conf)
-  --ndb-config=PATH       NDB configuration file (default: ndb-config.properties)
+  --ndb-config=FILENAME   NDB configuration filename on classpath (default: ndb-config.properties)
   --dfs-base-dir=PATH     DFS data directory (default: /tmp/hopsfs-data)
   -h, --help              Show this help message
 ```
 
 ## NDB Configuration
 
-Use a custom NDB configuration file:
+The `--ndb-config` option specifies a filename that is loaded from the classpath. To use a custom NDB configuration file, add the directory containing your config file to the classpath:
 
 ```bash
-java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar --ndb-config=/etc/hopsfs/ndb-config.properties
+java -cp "/etc/hopsfs:target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main \
+     --ndb-config=ndb-config.properties
 ```
 
-Or override individual settings with system properties:
+In this example, `/etc/hopsfs` is added to the classpath, so the file `/etc/hopsfs/ndb-config.properties` will be found when specifying `--ndb-config=ndb-config.properties`.
+
+You can also override individual settings with system properties:
 
 ```bash
 java -Dcom.mysql.clusterj.connectstring=ndb-host:1186 \
@@ -63,7 +66,7 @@ java -Dcom.mysql.clusterj.connectstring=ndb-host:1186 \
      -Dio.hops.metadata.ndb.mysqlserver.host=mysql-host \
      -Dio.hops.metadata.ndb.mysqlserver.port=3306 \
      -Djava.library.path=/path/to/ndb/lib \
-     -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar
+     -cp "target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main
 ```
 
 See `src/main/resources/ndb-config.properties` for all available options.
@@ -85,7 +88,7 @@ Starts a cluster with 1 NameNode (port 8020), 1 DataNode, configs in `/tmp/hopsf
 
 ### Custom Cluster
 ```bash
-java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar \
+java -cp "target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main \
      --num-namenodes=2 \
      --num-datanodes=3 \
      --namenode-port=9000 \
@@ -95,8 +98,8 @@ java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar \
 
 ### With Custom NDB Config
 ```bash
-java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar \
-     --ndb-config=/etc/hopsfs/ndb-config.properties \
+java -cp "/etc/hopsfs:target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main \
+     --ndb-config=ndb-config.properties \
      --num-datanodes=2
 ```
 

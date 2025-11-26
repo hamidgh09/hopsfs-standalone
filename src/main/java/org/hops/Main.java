@@ -1,7 +1,5 @@
 package org.hops;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CloudProvider;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -18,8 +16,6 @@ import java.io.*;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
 public class Main {
-
-  static final Log LOG = LogFactory.getLog(Main.class);
 
   private static class ClusterConfig {
     int numDataNodes = 1;
@@ -88,7 +84,7 @@ public class Main {
     System.out.println("  --num-namenodes=N       Number of NameNodes (default: 1)");
     System.out.println("  --namenode-port=N       NameNode port (default: 8020)");
     System.out.println("  --conf-dir=PATH         Configuration output directory (default: /tmp/hopsfs-conf)");
-    System.out.println("  --ndb-config=PATH       NDB configuration file (default: ndb-config.properties)");
+    System.out.println("  --ndb-config=FILENAME   NDB configuration fileneme (default: " + "ndb-config.properties)");
     System.out.println("  --dfs-base-dir=PATH     DFS data directory (default: /tmp/hopsfs-data)");
     System.out.println("  -h, --help              Show this help message");
     System.out.println();
@@ -96,7 +92,7 @@ public class Main {
     System.out.println("  -Djava.library.path=/path/to/ndb/lib");
     System.out.println();
     System.out.println("Example:");
-    System.out.println("  java -jar hopsfs-standalone.jar --num-datanodes=3 --namenode-port=9000");
+    System.out.println("  java -jar hopsfs-standalone.jar --num-datanodes=3 --namenode-port=8020");
   }
 
   public static void main(String[] args) {
@@ -105,11 +101,11 @@ public class Main {
     ClusterConfig config = parseCommandLineArgs(args);
 
     if (config.numNameNodes < 1) {
-      LOG.error("Number of NameNodes must be at least 1");
+      System.err.println("Number of NameNodes must be at least 1");
       System.exit(1);
     }
     if (config.numDataNodes < 1) {
-      LOG.error("Number of DataNodes must be at least 1");
+      System.err.println("Number of DataNodes must be at least 1");
       System.exit(1);
     }
 
@@ -117,14 +113,14 @@ public class Main {
     final int NAMENODE_PORT = config.nameNodePort;
 
     try {
-      LOG.info("Starting HopsFS standalone cluster...");
-      LOG.info("Configuration parameters:");
-      LOG.info("  Number of DataNodes: " + NUM_DN);
-      LOG.info("  Number of NameNodes: " + config.numNameNodes);
-      LOG.info("  NameNode port: " + NAMENODE_PORT);
-      LOG.info("  Configuration output directory: " + config.confDir);
-      LOG.info("  NDB config file: " + config.ndbConfigFile);
-      LOG.info("  DFS base directory: " + config.dfsBaseDir);
+      System.out.println("Starting HopsFS standalone cluster...");
+      System.out.println("Configuration parameters:");
+      System.out.println("  Number of DataNodes: " + NUM_DN);
+      System.out.println("  Number of NameNodes: " + config.numNameNodes);
+      System.out.println("  NameNode port: " + NAMENODE_PORT);
+      System.out.println("  Configuration output directory: " + config.confDir);
+      System.out.println("  NDB config file: " + config.ndbConfigFile);
+      System.out.println("  DFS base directory: " + config.dfsBaseDir);
 
       Configuration conf = new HdfsConfiguration();
       conf.addResource("hopsfs-site.xml");
@@ -161,7 +157,7 @@ public class Main {
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
 
-      LOG.info("Building MiniDFSCluster...");
+      System.out.println("Building MiniDFSCluster...");
       MiniDFSCluster.Builder clusterBuilder = new MiniDFSCluster.Builder(conf)
               .numDataNodes(NUM_DN);
       if (cloudEnabled) {
@@ -180,7 +176,7 @@ public class Main {
       DistributedFileSystem dfs = (DistributedFileSystem) FileSystem
               .newInstance(fs.getUri(), fs.getConf());
 
-      LOG.info("Cluster started successfully!");
+      System.out.println("Cluster started successfully!");
 
       if (cloudEnabled) {
         dfs.setStoragePolicy(new Path("/"), "CLOUD");
@@ -219,21 +215,21 @@ public class Main {
       // Write HopsFS configuration files
       writeHopsFSConfig(cluster, config.confDir);
 
-      LOG.info("================================================================================");
-      LOG.info("HopsFS cluster is running!");
-      LOG.info("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
-      LOG.info("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
-      LOG.info("Configuration written to: " + config.confDir);
-      LOG.info("================================================================================");
-      LOG.info("Press Ctrl+C to shutdown...");
+      System.out.println("================================================================================");
+      System.out.println("HopsFS cluster is running!");
+      System.out.println("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
+      System.out.println("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
+      System.out.println("Configuration written to: " + config.confDir);
+      System.out.println("================================================================================");
+      System.out.println("Press Ctrl+C to shutdown...");
 
       // Keep the cluster running
       Thread.sleep(Long.MAX_VALUE);
 
     } catch (InterruptedException e) {
-      LOG.info("Cluster interrupted, shutting down...");
+      System.out.println("Cluster interrupted, shutting down...");
     } catch (Exception e) {
-      LOG.error("Error running HopsFS standalone cluster", e);
+      System.err.println("Error running HopsFS standalone cluster: " + e.getMessage());
       e.printStackTrace();
     } finally {
       if (cluster != null) {
@@ -263,6 +259,6 @@ public class Main {
       writer.close();
     }
 
-    LOG.info("Configuration files written to " + confDir);
+    System.out.println("Configuration files written to " + confDir);
   }
 }
