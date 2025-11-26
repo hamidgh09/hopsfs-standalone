@@ -1,15 +1,21 @@
 package org.hops;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.crypto.key.kms.KMSClientProvider;
+import org.apache.hadoop.crypto.key.kms.server.KMSConfiguration;
+import org.apache.hadoop.crypto.key.kms.server.MiniKMS;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.client.HdfsAdmin;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProvider;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProviderFactory;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.security.ssl.HopsSSLTestUtils;
+import org.junit.Assert;
 
 import java.io.*;
+import java.util.UUID;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
@@ -97,8 +103,16 @@ public class Main extends HopsSSLTestUtils {
     new Main().app(args);
   }
 
+
+  protected String getKeyProviderURI(MiniKMS miniKMS) {
+    return KMSClientProvider.SCHEME_NAME + "://" +
+            miniKMS.getKMSUrl().toExternalForm().replace("://", "@");
+  }
+
   public void app(String[] args) {
     MiniDFSCluster cluster = null;
+    MiniKMS miniKMS = null;
+    final String TEST_KEY = "test_key";
 
     ClusterConfig config = parseCommandLineArgs(args);
 
@@ -126,6 +140,29 @@ public class Main extends HopsSSLTestUtils {
 
       Configuration conf = new HdfsConfiguration();
       conf.addResource("hopsfs-site.xml");
+
+
+      // ----------------------------------KMS Setup------------------------------------------------
+      File kmsDir = null;
+      boolean kmsEnabled = false;
+      if (conf.getBoolean("enable.kms", false)) {
+        File confDir = new File(config.confDir);
+        kmsDir = new File(confDir, "kms");
+        Assert.assertTrue(kmsDir.mkdirs());
+
+        MiniKMS.Builder miniKMSBuilder = new MiniKMS.Builder();
+        miniKMS = miniKMSBuilder.setKmsConfDir(kmsDir).build();
+        miniKMS.start();
+
+        conf.set(DFSConfigKeys.DFS_ENCRYPTION_KEY_PROVIDER_URI, getKeyProviderURI(miniKMS));
+        conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_KEY_PROVIDER_PATH,
+                getKeyProviderURI(miniKMS));
+        conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_DELEGATION_TOKEN_ALWAYS_USE_KEY, true);
+        // Lower the batch size for testing
+        conf.setInt(DFSConfigKeys.DFS_NAMENODE_LIST_ENCRYPTION_ZONES_NUM_RESPONSES, 2);
+        kmsEnabled = true;
+      }
+
 
       // ----------------------------------Cloud Setup----------------------------------------------
       String bucket = "";
@@ -158,6 +195,7 @@ public class Main extends HopsSSLTestUtils {
       // ----------------------------------Storage dirs---------------------------------------------
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
+      conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
 
       // ----------------------------------SSL configuration----------------------------------------
       String cryptoDir = "";
@@ -192,11 +230,21 @@ public class Main extends HopsSSLTestUtils {
       clusterBuilder = clusterBuilder.format(true);
       cluster = clusterBuilder.build();
 
+      System.out.println("Cluster started successfully!");
+
+      // ----------------------------------Setup KMS------------------------------------------------
+      if (kmsEnabled) {
+        final HdfsAdmin dfsAdmin = new HdfsAdmin(cluster.getURI(), conf);
+        DFSTestUtil.createKey(TEST_KEY, cluster, conf);
+
+        final Path zone = new Path("/");
+        dfsAdmin.createEncryptionZone(zone, TEST_KEY);
+      }
+
+      // ----------------------------------Get file system clients----------------------------------
       FileSystem fs = cluster.getFileSystem(0);
       DistributedFileSystem dfs = (DistributedFileSystem) FileSystem
               .newInstance(fs.getUri(), fs.getConf());
-
-      System.out.println("Cluster started successfully!");
 
       // ----------------------------------Set storage policy---------------------------------------
       if (cloudEnabled) {
@@ -245,6 +293,10 @@ public class Main extends HopsSSLTestUtils {
       System.out.println("SSL Enabled: " + sslEnabled);
       if (sslEnabled) {
         System.out.println("SSL Crypt Dir: " + cryptoDir);
+      }
+      System.out.println("KMS Enabled: " + kmsEnabled);
+      if (kmsEnabled) {
+        System.out.println("KMS Provider: " + getKeyProviderURI(miniKMS));
       }
       System.out.println("================================================================================");
       System.out.println("Press Ctrl+C to shutdown...");
