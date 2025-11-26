@@ -37,5 +37,18 @@ TAIL_PID=$!
 # Trap SIGINT (Ctrl+C) and SIGTERM to kill java immediately
 trap "echo 'Killing HopsFS...'; kill -SIGKILL $JAVA_PID $TAIL_PID 2>/dev/null; exit 0" SIGINT SIGTERM
 
+# Wait for HopsFS to generate JKS certs, then convert them to PEM format.
+# gen-certs extracts private key, root CA, and client cert from JKS keystores.
+CERTS_DIR="$HOPSFS_OUTPUT_DIR/conf/certs"
+while [ ! -f "$CERTS_DIR/salman__passwd" ]; do
+    sleep 1
+done
+# Pause tail to allow gen-certs prompts (sudo) to be visible
+kill $TAIL_PID 2>/dev/null
+"$DIR/gen-certs" "$CERTS_DIR"
+# Resume tailing
+tail -f "$LOG_FILE" &
+TAIL_PID=$!
+
 # Wait for java process
 wait $JAVA_PID
