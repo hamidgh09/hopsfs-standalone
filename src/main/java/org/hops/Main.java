@@ -1,21 +1,19 @@
 package org.hops;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CloudProvider;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProvider;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProviderFactory;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.security.ssl.HopsSSLTestUtils;
 
 import java.io.*;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
-public class Main {
+public class Main extends HopsSSLTestUtils {
 
   private static class ClusterConfig {
     int numDataNodes = 1;
@@ -96,6 +94,10 @@ public class Main {
   }
 
   public static void main(String[] args) {
+    new Main().app(args);
+  }
+
+  public void app(String[] args) {
     MiniDFSCluster cluster = null;
 
     ClusterConfig config = parseCommandLineArgs(args);
@@ -125,6 +127,7 @@ public class Main {
       Configuration conf = new HdfsConfiguration();
       conf.addResource("hopsfs-site.xml");
 
+      // ----------------------------------Cloud Setup----------------------------------------------
       String bucket = "";
       boolean cloudEnabled = false;
       if (conf.getBoolean(DFS_ENABLE_CLOUD_PERSISTENCE, DFS_ENABLE_CLOUD_PERSISTENCE_DEFAULT)) {
@@ -152,10 +155,27 @@ public class Main {
         cloud.shutdown();
       }
 
-      conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
-      conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
+      // ----------------------------------Storage dirs---------------------------------------------
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
+
+      // ----------------------------------SSL configuration----------------------------------------
+      String cryptoDir = "";
+      boolean sslEnabled = false;
+      if (conf.getBoolean(CommonConfigurationKeysPublic.IPC_SERVER_SSL_ENABLED, false)) {
+        File confDir = new File(config.confDir);
+        cryptoDir = (new File(confDir, "certs")).toString();
+        prepareCryptoMaterial(cryptoDir);
+
+        conf.setEnum("hops.tls.rpc-acl-auth-mode", io.hops.security.HopsX509Authenticator.AUTH_MODE.NONE); // Disable auth checks for proxy users
+        setCryptoConfig(conf, cryptoDir);
+        sslEnabled = true;
+      }
+
+      // ----------------------------------Enable user impersonation for this user------------------
+      String currentUser = System.getProperty("user.name");
+      conf.set("hadoop.proxyuser." + currentUser + ".hosts", "*");
+      conf.set("hadoop.proxyuser." + currentUser + ".groups", "*");
 
       System.out.println("Building MiniDFSCluster...");
       MiniDFSCluster.Builder clusterBuilder = new MiniDFSCluster.Builder(conf)
@@ -178,6 +198,7 @@ public class Main {
 
       System.out.println("Cluster started successfully!");
 
+      // ----------------------------------Set storage policy---------------------------------------
       if (cloudEnabled) {
         dfs.setStoragePolicy(new Path("/"), "CLOUD");
       } else {
@@ -185,6 +206,7 @@ public class Main {
       }
 
 
+      // ----------------------------------Create sample data---------------------------------------
       if (conf.getBoolean("create.test.data", false)) {
 
         dfs.mkdirs(new Path("/_test"), new FsPermission(0777));
@@ -220,6 +242,10 @@ public class Main {
       System.out.println("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
       System.out.println("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
       System.out.println("Configuration written to: " + config.confDir);
+      System.out.println("SSL Enabled: " + sslEnabled);
+      if (sslEnabled) {
+        System.out.println("SSL Crypt Dir: " + cryptoDir);
+      }
       System.out.println("================================================================================");
       System.out.println("Press Ctrl+C to shutdown...");
 
