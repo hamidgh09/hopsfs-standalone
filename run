@@ -1,0 +1,41 @@
+#!/bin/bash
+#set -x
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+cd "$DIR"
+
+# Override JAVA_HOME if needed
+ export JAVA_HOME="${HOME}/usr/bin/jdk_for_hadoop"
+ export PATH="${JAVA_HOME}/bin:$PATH"
+
+# Directory containing ndb-config.properties and hopsfs-site.xml (added to classpath)
+HOPSFS_CONF_DIR="$DIR"
+
+# Output directory for runtime data
+HOPSFS_OUTPUT_DIR=/tmp/hopsfs
+
+LOG_FILE="$DIR/hopsfs.log"
+
+rm -rf "$HOPSFS_OUTPUT_DIR"
+rm -f "$LOG_FILE"
+
+export AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT=true
+
+# Run java in background, write to log file
+java -cp "$HOPSFS_CONF_DIR:target/hopsfs-standalone-1.0-SNAPSHOT.jar" org.hops.Main \
+    --conf-dir="$HOPSFS_OUTPUT_DIR/conf" \
+    --dfs-base-dir="$HOPSFS_OUTPUT_DIR/data" \
+    --num-namenodes=1 \
+    --num-datanodes=1 \
+    &> "$LOG_FILE" &
+
+JAVA_PID=$!
+
+# Tail the log file in background
+tail -f "$LOG_FILE" &
+TAIL_PID=$!
+
+# Trap SIGINT (Ctrl+C) and SIGTERM to kill java immediately
+trap "echo 'Killing HopsFS...'; kill -SIGKILL $JAVA_PID $TAIL_PID 2>/dev/null; exit 0" SIGINT SIGTERM
+
+# Wait for java process
+wait $JAVA_PID
