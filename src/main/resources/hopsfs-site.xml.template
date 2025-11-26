@@ -51,7 +51,7 @@
 <!-- *************  SSL ************* -->
 <!-- <property> -->
    <!-- <name>ipc.server.ssl.enabled</name> -->
-   <!-- <value>false</value> -->
+   <!-- <value>true</value> -->
    <!-- <description>Enable/Disable SSL</description> -->
 <!-- </property> -->
 
