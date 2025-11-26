@@ -15,12 +15,51 @@
 -->
 
 <!-- Put site-specific property overrides in this file. -->
-<!-- You can also make a copy of this file, change it and add it to your class path   -->
-
-<!-- NOTE you can not override some properties for example NN port etc at this uses   -->
-<!-- minidfs cluster under the hood   -->
 
 <configuration>
 
+<!-- *************  Create Test Data ************* -->
+<!-- <property> -->
+   <!-- <name>create.test.data</name> -->
+   <!-- <value>true</value> -->
+<!-- </property> -->
+
+<!-- *************  Cloud Storage ************* -->
+<!-- <property> -->
+   <!-- <name>dfs.enable.cloud.persistence</name> -->
+   <!-- <value>true</value> -->
+<!-- </property> -->
+
+<!-- <property> -->
+   <!-- <name>dfs.cloud.provider</name> -->
+   <!-- <value>AWS</value> -->
+   <!-- <description>Cloud provider. Currently only AWS is supported</description> -->
+<!-- </property> -->
+
+<!-- <property> -->
+   <!-- <name>dfs.cloud.aws.s3.bucket</name> -->
+   <!-- <value>hopsfsstandalonecluster</value> -->
+   <!-- <description>Hopsfs S3 bucket used to store file system blocks</description> -->
+<!-- </property> -->
+
+<!-- <property> -->
+   <!-- <name>dfs.cloud.aws.s3.region</name> -->
+   <!-- <value>eu-north-1</value> -->
+   <!-- <description>Bucket region</description> -->
+<!-- </property> -->
+
+<!-- *************  SSL ************* -->
+<!-- <property> -->
+   <!-- <name>ipc.server.ssl.enabled</name> -->
+   <!-- <value>false</value> -->
+   <!-- <description>Enable/Disable SSL</description> -->
+<!-- </property> -->
+
+<!-- *************  KMS ************* -->
+<!-- <property> -->
+   <!-- <name>enable.kms</name> -->
+   <!-- <value>true</value> -->
+   <!-- <description>Enable/Disable KMS</description> -->
+<!-- </property> -->
 
 </configuration>

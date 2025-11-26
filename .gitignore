@@ -41,3 +41,6 @@ build/
 log4j2.properties
 ndb-config.properties
 run
+hopsfs-site.xml
+hopsfs.log
+
