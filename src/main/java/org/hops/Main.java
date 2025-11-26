@@ -286,7 +286,6 @@ public class Main extends HopsSSLTestUtils {
       writeHopsFSConfig(cluster, config.confDir);
 
       System.out.println("================================================================================");
-      System.out.println("HopsFS cluster is running!");
       System.out.println("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
       System.out.println("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
       System.out.println("Configuration written to: " + config.confDir);
@@ -299,6 +298,7 @@ public class Main extends HopsSSLTestUtils {
         System.out.println("KMS Provider: " + getKeyProviderURI(miniKMS));
       }
       System.out.println("================================================================================");
+      System.out.println("HopsFS cluster is running!");
       System.out.println("Press Ctrl+C to shutdown...");
 
       // Keep the cluster running
