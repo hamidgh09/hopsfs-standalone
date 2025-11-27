@@ -289,6 +289,7 @@ public class Main extends HopsSSLTestUtils {
       System.out.println("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
       System.out.println("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
       System.out.println("Configuration written to: " + config.confDir);
+      System.out.println("Cloud Enabled: " + cloudEnabled);
       System.out.println("SSL Enabled: " + sslEnabled);
       if (sslEnabled) {
         System.out.println("SSL Crypt Dir: " + cryptoDir);
