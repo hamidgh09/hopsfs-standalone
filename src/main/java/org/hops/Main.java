@@ -33,6 +33,7 @@ public class Main {
     String serviceRpcAddress = null;  // Default: not set
     Integer ipcServerRpcReadThreads = null;  // Default: not set
     int numCommittedAllowed = 0;  // Default: 0
+    Integer replication = null;  // Default: not set
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -93,6 +94,12 @@ public class Main {
         }
       } else if (args[i].startsWith("--num-committed-allowed=")) {
         config.numCommittedAllowed = Integer.parseInt(args[i].substring("--num-committed-allowed=".length()));
+      } else if (args[i].equals("--replication") || args[i].equals("-r")) {
+        if (i + 1 < args.length) {
+          config.replication = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--replication=")) {
+        config.replication = Integer.parseInt(args[i].substring("--replication=".length()));
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -116,6 +123,7 @@ public class Main {
     System.out.println("  --service-rpc-address=ADDR           Service RPC address (e.g., localhost:8021)");
     System.out.println("  --ipc-server-rpc-read-threads=N      IPC server RPC read threads");
     System.out.println("  --num-committed-allowed=N            Number of committed replicas allowed for file close (default: 0)");
+    System.out.println("  -r, --replication=N                  Default replication factor");
     System.out.println("  -h, --help                           Show this help message");
     System.out.println();
     System.out.println("System Properties:");
@@ -151,6 +159,9 @@ public class Main {
       }
       if (config.numCommittedAllowed != 0)
         LOG.info("  Num committed allowed: " + config.numCommittedAllowed);
+      if (config.replication != null) {
+        LOG.info("  Replication: " + config.replication);
+      }
 
       Configuration conf = new HdfsConfiguration();
       conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
@@ -168,7 +179,10 @@ public class Main {
         conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, config.serviceRpcAddress);
       }
       if (config.numCommittedAllowed != 0) {
-        conf.setInt(DFS_NAMENODE_FILE_CLOSE_NUM_COMMITTED_ALLOWED_KEY, config.numCommittedAllowed);
+        conf.setInt("dfs.namenode.file.close.num-committed-allowed", config.numCommittedAllowed);
+      }
+      if (config.replication != null) {
+        conf.setInt(DFS_REPLICATION_KEY, config.replication);
       }
 
       LOG.info("Building MiniDFSCluster...");
