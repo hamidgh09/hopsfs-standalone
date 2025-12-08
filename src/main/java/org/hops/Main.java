@@ -34,6 +34,8 @@ public class Main {
     Integer ipcServerRpcReadThreads = null;  // Default: not set
     int numCommittedAllowed = 0;  // Default: 0
     Integer replication = null;  // Default: not set
+    int datanodeHandlerCount = 10;  // Default: 10
+    int namenodeHandlerCount = 10;  // Default: 10
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
@@ -100,6 +102,18 @@ public class Main {
         }
       } else if (args[i].startsWith("--replication=")) {
         config.replication = Integer.parseInt(args[i].substring("--replication=".length()));
+      } else if (args[i].equals("--datanode-handler-count")) {
+        if (i + 1 < args.length) {
+          config.datanodeHandlerCount = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--datanode-handler-count=")) {
+        config.datanodeHandlerCount = Integer.parseInt(args[i].substring("--datanode-handler-count=".length()));
+      } else if (args[i].equals("--namenode-handler-count")) {
+        if (i + 1 < args.length) {
+          config.namenodeHandlerCount = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--namenode-handler-count=")) {
+        config.namenodeHandlerCount = Integer.parseInt(args[i].substring("--namenode-handler-count=".length()));
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -124,6 +138,8 @@ public class Main {
     System.out.println("  --ipc-server-rpc-read-threads=N      IPC server RPC read threads");
     System.out.println("  --num-committed-allowed=N            Number of committed replicas allowed for file close (default: 0)");
     System.out.println("  -r, --replication=N                  Default replication factor");
+    System.out.println("  --datanode-handler-count=N           DataNode handler count (default: 10)");
+    System.out.println("  --namenode-handler-count=N           NameNode handler count (default: 10)");
     System.out.println("  -h, --help                           Show this help message");
     System.out.println();
     System.out.println("System Properties:");
@@ -162,6 +178,8 @@ public class Main {
       if (config.replication != null) {
         LOG.info("  Replication: " + config.replication);
       }
+      LOG.info("  DataNode handler count: " + config.datanodeHandlerCount);
+      LOG.info("  NameNode handler count: " + config.namenodeHandlerCount);
 
       Configuration conf = new HdfsConfiguration();
       conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
@@ -170,8 +188,8 @@ public class Main {
       conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
-      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(10));
-      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(10));
+      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(config.datanodeHandlerCount));
+      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(config.namenodeHandlerCount));
       if (config.ipcServerRpcReadThreads != null) {
         conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(config.ipcServerRpcReadThreads));
       }
