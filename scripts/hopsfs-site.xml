@@ -19,10 +19,11 @@
 <configuration>
 
 <!-- *************  Create Test Data ************* -->
-<property>
-   <name>create.test.data</name>
-   <value>true</value>
-</property>
+
+<!-- <property> -->
+   <!-- <name>create.test.data</name> -->
+   <!-- <value>true</value> -->
+<!-- </property> -->
 
 <!-- *************  Cloud Storage ************* -->
 <!-- ***** NOTE. For minio there is *********** -->

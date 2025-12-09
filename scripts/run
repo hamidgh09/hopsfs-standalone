@@ -15,11 +15,6 @@ if [ "$JAVA_VERSION" -gt 11 ]; then
     exit 1
 fi
 
-
-# minio config params. 
-export AWS_ACCESS_KEY_ID="minioadmin"
-export AWS_SECRET_ACCESS_KEY="minioadmin"
-
 # Directory containing ndb-config.properties and hopsfs-site.xml (added to classpath)
 HOPSFS_CONF_DIR="$SCRIPT_DIR"
 
@@ -46,7 +41,7 @@ java -cp "$HOPSFS_CONF_DIR:$JAR_FILE" org.hops.Main \
     --dfs-base-dir="$HOPSFS_OUTPUT_DIR/data" \
     --num-namenodes=1 \
     --num-datanodes=1 \
-    &> "$LOG_FILE" &
+    > "$LOG_FILE" 2>&1 &
 
 JAVA_PID=$!
 
