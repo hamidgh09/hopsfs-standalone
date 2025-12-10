@@ -1,66 +1,58 @@
 package org.hops;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.crypto.key.kms.KMSClientProvider;
+import org.apache.hadoop.crypto.key.kms.server.KMSConfiguration;
+import org.apache.hadoop.crypto.key.kms.server.MiniKMS;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.client.HdfsAdmin;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProvider;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.cloud.CloudPersistenceProviderFactory;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.security.ssl.HopsSSLTestUtils;
+import org.junit.Assert;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.util.UUID;
 
-import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_SERVER_RPC_READ_THREADS_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
-public class Main {
-
-  static final Log LOG = LogFactory.getLog(Main.class);
+public class Main extends HopsSSLTestUtils {
 
   private static class ClusterConfig {
     int numDataNodes = 1;
-    int blockSize = 128 * 1024 * 1024;  // 128MB
+    int numNameNodes = 1;
     int nameNodePort = 8020;
     String confDir = "/tmp/hopsfs-conf";
     String ndbConfigFile = "ndb-config.properties";  // Default: bundled resource
     String dfsBaseDir = "/tmp/hopsfs-data";  // Default: temporary directory
-    String serviceRpcAddress = null;  // Default: not set
-    Integer ipcServerRpcReadThreads = null;  // Default: not set
-    int numCommittedAllowed = 0;  // Default: 0
-    Integer replication = null;  // Default: not set
-    int datanodeHandlerCount = 10;  // Default: 10
-    int namenodeHandlerCount = 10;  // Default: 10
   }
 
   private static ClusterConfig parseCommandLineArgs(String[] args) {
     ClusterConfig config = new ClusterConfig();
 
     for (int i = 0; i < args.length; i++) {
-      if (args[i].equals("--num-datanodes") || args[i].equals("-n")) {
+      if (args[i].equals("--num-datanodes")) {
         if (i + 1 < args.length) {
           config.numDataNodes = Integer.parseInt(args[++i]);
         }
       } else if (args[i].startsWith("--num-datanodes=")) {
         config.numDataNodes = Integer.parseInt(args[i].substring("--num-datanodes=".length()));
-      } else if (args[i].equals("--namenode-port") || args[i].equals("-p")) {
+      } else if (args[i].equals("--num-namenodes")) {
+        if (i + 1 < args.length) {
+          config.numNameNodes = Integer.parseInt(args[++i]);
+        }
+      } else if (args[i].startsWith("--num-namenodes=")) {
+        config.numNameNodes = Integer.parseInt(args[i].substring("--num-namenodes=".length()));
+      } else if (args[i].equals("--namenode-port")) {
         if (i + 1 < args.length) {
           config.nameNodePort = Integer.parseInt(args[++i]);
         }
       } else if (args[i].startsWith("--namenode-port=")) {
         config.nameNodePort = Integer.parseInt(args[i].substring("--namenode-port=".length()));
-      } else if (args[i].equals("--block-size") || args[i].equals("-b")) {
-        if (i + 1 < args.length) {
-          config.blockSize = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--block-size=")) {
-        config.blockSize = Integer.parseInt(args[i].substring("--block-size=".length()));
-      } else if (args[i].equals("--conf-dir") || args[i].equals("-c")) {
+      } else if (args[i].equals("--conf-dir")) {
         if (i + 1 < args.length) {
           config.confDir = args[++i];
         }
@@ -78,42 +70,6 @@ public class Main {
         }
       } else if (args[i].startsWith("--dfs-base-dir=")) {
         config.dfsBaseDir = args[i].substring("--dfs-base-dir=".length());
-      } else if (args[i].equals("--service-rpc-address")) {
-        if (i + 1 < args.length) {
-          config.serviceRpcAddress = args[++i];
-        }
-      } else if (args[i].startsWith("--service-rpc-address=")) {
-        config.serviceRpcAddress = args[i].substring("--service-rpc-address=".length());
-      } else if (args[i].equals("--ipc-server-rpc-read-threads")) {
-        if (i + 1 < args.length) {
-          config.ipcServerRpcReadThreads = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--ipc-server-rpc-read-threads=")) {
-        config.ipcServerRpcReadThreads = Integer.parseInt(args[i].substring("--ipc-server-rpc-read-threads=".length()));
-      } else if (args[i].equals("--num-committed-allowed")) {
-        if (i + 1 < args.length) {
-          config.numCommittedAllowed = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--num-committed-allowed=")) {
-        config.numCommittedAllowed = Integer.parseInt(args[i].substring("--num-committed-allowed=".length()));
-      } else if (args[i].equals("--replication") || args[i].equals("-r")) {
-        if (i + 1 < args.length) {
-          config.replication = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--replication=")) {
-        config.replication = Integer.parseInt(args[i].substring("--replication=".length()));
-      } else if (args[i].equals("--datanode-handler-count")) {
-        if (i + 1 < args.length) {
-          config.datanodeHandlerCount = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--datanode-handler-count=")) {
-        config.datanodeHandlerCount = Integer.parseInt(args[i].substring("--datanode-handler-count=".length()));
-      } else if (args[i].equals("--namenode-handler-count")) {
-        if (i + 1 < args.length) {
-          config.namenodeHandlerCount = Integer.parseInt(args[++i]);
-        }
-      } else if (args[i].startsWith("--namenode-handler-count=")) {
-        config.namenodeHandlerCount = Integer.parseInt(args[i].substring("--namenode-handler-count=".length()));
       } else if (args[i].equals("--help") || args[i].equals("-h")) {
         printUsage();
         System.exit(0);
@@ -128,130 +84,231 @@ public class Main {
     System.out.println("Usage: java -jar hopsfs-standalone.jar [options]");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  -n, --num-datanodes=N                Number of DataNodes (default: 1)");
-    System.out.println("  -p, --namenode-port=N                NameNode port (default: 8020)");
-    System.out.println("  -b, --block-size=N                   Block size in bytes (default: 134217728)");
-    System.out.println("  -c, --conf-dir=PATH                  Configuration output directory (default: /tmp/hopsfs-conf)");
-    System.out.println("  --ndb-config=PATH                    NDB configuration file (default: ndb-config.properties)");
-    System.out.println("  --dfs-base-dir=PATH                  DFS data directory (default: /tmp/hopsfs-data)");
-    System.out.println("  --service-rpc-address=ADDR           Service RPC address (e.g., localhost:8021)");
-    System.out.println("  --ipc-server-rpc-read-threads=N      IPC server RPC read threads");
-    System.out.println("  --num-committed-allowed=N            Number of committed replicas allowed for file close (default: 0)");
-    System.out.println("  -r, --replication=N                  Default replication factor");
-    System.out.println("  --datanode-handler-count=N           DataNode handler count (default: 10)");
-    System.out.println("  --namenode-handler-count=N           NameNode handler count (default: 10)");
-    System.out.println("  -h, --help                           Show this help message");
+    System.out.println("  --num-datanodes=N       Number of DataNodes (default: 1)");
+    System.out.println("  --num-namenodes=N       Number of NameNodes (default: 1)");
+    System.out.println("  --namenode-port=N       NameNode port (default: 8020)");
+    System.out.println("  --conf-dir=PATH         Configuration output directory (default: /tmp/hopsfs-conf)");
+    System.out.println("  --ndb-config=FILENAME   NDB configuration fileneme (default: " + "ndb-config.properties)");
+    System.out.println("  --dfs-base-dir=PATH     DFS data directory (default: /tmp/hopsfs-data)");
+    System.out.println("  -h, --help              Show this help message");
     System.out.println();
     System.out.println("System Properties:");
     System.out.println("  -Djava.library.path=/path/to/ndb/lib");
     System.out.println();
     System.out.println("Example:");
-    System.out.println("  java -jar hopsfs-standalone.jar --num-datanodes=3 --namenode-port=9000");
+    System.out.println("  java -jar hopsfs-standalone.jar --num-datanodes=3 --namenode-port=8020");
   }
 
   public static void main(String[] args) {
+    new Main().app(args);
+  }
+
+
+  protected String getKeyProviderURI(MiniKMS miniKMS) {
+    return KMSClientProvider.SCHEME_NAME + "://" +
+            miniKMS.getKMSUrl().toExternalForm().replace("://", "@");
+  }
+
+  public void app(String[] args) {
     MiniDFSCluster cluster = null;
+    MiniKMS miniKMS = null;
+    final String TEST_KEY = "test_key";
 
     ClusterConfig config = parseCommandLineArgs(args);
 
-    final int BLKSIZE = config.blockSize;
+    if (config.numNameNodes < 1) {
+      System.err.println("Number of NameNodes must be at least 1");
+      System.exit(1);
+    }
+    if (config.numDataNodes < 1) {
+      System.err.println("Number of DataNodes must be at least 1");
+      System.exit(1);
+    }
+
     final int NUM_DN = config.numDataNodes;
     final int NAMENODE_PORT = config.nameNodePort;
 
     try {
-      LOG.info("Starting HopsFS standalone cluster...");
-      LOG.info("Configuration parameters:");
-      LOG.info("  Number of DataNodes: " + NUM_DN);
-      LOG.info("  NameNode port: " + NAMENODE_PORT);
-      LOG.info("  Block size: " + BLKSIZE + " bytes");
-      LOG.info("  Configuration output directory: " + config.confDir);
-      LOG.info("  NDB config file: " + config.ndbConfigFile);
-      LOG.info("  DFS base directory: " + config.dfsBaseDir);
-      if (config.serviceRpcAddress != null) {
-        LOG.info("  Service RPC address: " + config.serviceRpcAddress);
-      }
-      if (config.ipcServerRpcReadThreads != null) {
-        LOG.info("  IPC server RPC read threads: " + config.ipcServerRpcReadThreads);
-      }
-      if (config.numCommittedAllowed != 0)
-        LOG.info("  Num committed allowed: " + config.numCommittedAllowed);
-      if (config.replication != null) {
-        LOG.info("  Replication: " + config.replication);
-      }
-      LOG.info("  DataNode handler count: " + config.datanodeHandlerCount);
-      LOG.info("  NameNode handler count: " + config.namenodeHandlerCount);
+      System.out.println("Starting HopsFS standalone cluster...");
+      System.out.println("Configuration parameters:");
+      System.out.println("  Number of DataNodes: " + NUM_DN);
+      System.out.println("  Number of NameNodes: " + config.numNameNodes);
+      System.out.println("  NameNode port: " + NAMENODE_PORT);
+      System.out.println("  Configuration output directory: " + config.confDir);
+      System.out.println("  NDB config file: " + config.ndbConfigFile);
+      System.out.println("  DFS base directory: " + config.dfsBaseDir);
 
       Configuration conf = new HdfsConfiguration();
-      conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLKSIZE);
-      conf.setLong(DFSConfigKeys.DFS_NAMENODE_RETRY_CACHE_EXPIRYTIME_MILLIS_KEY, 5000);
-      conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
-      conf.setBoolean(DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY, false);
+      conf.addResource("hopsfs-site.xml");
+
+
+      // ----------------------------------KMS Setup------------------------------------------------
+      File kmsDir = null;
+      boolean kmsEnabled = false;
+      if (conf.getBoolean("enable.kms", false)) {
+        File confDir = new File(config.confDir);
+        kmsDir = new File(confDir, "kms");
+        Assert.assertTrue(kmsDir.mkdirs());
+
+        MiniKMS.Builder miniKMSBuilder = new MiniKMS.Builder();
+        miniKMS = miniKMSBuilder.setKmsConfDir(kmsDir).build();
+        miniKMS.start();
+
+        conf.set(DFSConfigKeys.DFS_ENCRYPTION_KEY_PROVIDER_URI, getKeyProviderURI(miniKMS));
+        conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_KEY_PROVIDER_PATH,
+                getKeyProviderURI(miniKMS));
+        conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_DELEGATION_TOKEN_ALWAYS_USE_KEY, true);
+        // Lower the batch size for testing
+        conf.setInt(DFSConfigKeys.DFS_NAMENODE_LIST_ENCRYPTION_ZONES_NUM_RESPONSES, 2);
+        kmsEnabled = true;
+      }
+
+
+      // ----------------------------------Cloud Setup----------------------------------------------
+      String bucket = "";
+      boolean cloudEnabled = false;
+      if (conf.getBoolean(DFS_ENABLE_CLOUD_PERSISTENCE, DFS_ENABLE_CLOUD_PERSISTENCE_DEFAULT)) {
+        cloudEnabled = true;
+        String cloudProvider = conf.get(DFS_CLOUD_PROVIDER);
+        if (cloudProvider == null) {
+          throw new RuntimeException("Cloud persistence enabled but DFS_CLOUD_PROVIDER not set");
+        }
+        if (cloudProvider.equalsIgnoreCase(CloudProvider.AZURE.name())) {
+          bucket = conf.get(DFSConfigKeys.AZURE_CONTAINER_KEY);
+        } else if (cloudProvider.equalsIgnoreCase(CloudProvider.AWS.name())) {
+          bucket = conf.get(DFSConfigKeys.S3_BUCKET_KEY);
+        } else if (cloudProvider.equalsIgnoreCase(CloudProvider.GCS.name())) {
+          bucket = conf.get(DFSConfigKeys.GCS_BUCKET_KEY);
+        } else {
+          throw new RuntimeException("Cloud provider not supported: " + cloudProvider);
+        }
+        if (bucket == null || bucket.isEmpty()) {
+          throw new RuntimeException("Bucket not configured for cloud provider: " + cloudProvider);
+        }
+
+        CloudPersistenceProvider cloud = CloudPersistenceProviderFactory.getCloudClient(conf);
+        cloud.deleteAllBuckets(bucket);
+        cloud.createBucket(bucket.toLowerCase());
+        cloud.shutdown();
+      }
+
+      // ----------------------------------Storage dirs---------------------------------------------
       conf.setStrings(DFSConfigKeys.DFS_STORAGE_DRIVER_CONFIG_FILE, config.ndbConfigFile);
       conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, config.dfsBaseDir);
-      conf.set(DFS_DATANODE_HANDLER_COUNT_KEY, Integer.toString(config.datanodeHandlerCount));
-      conf.set(DFS_NAMENODE_HANDLER_COUNT_KEY, Integer.toString(config.namenodeHandlerCount));
-      if (config.ipcServerRpcReadThreads != null) {
-        conf.set(IPC_SERVER_RPC_READ_THREADS_KEY, Integer.toString(config.ipcServerRpcReadThreads));
-      }
-      if (config.serviceRpcAddress != null) {
-        conf.set(DFS_NAMENODE_SERVICE_RPC_ADDRESS_KEY, config.serviceRpcAddress);
-      }
-      if (config.numCommittedAllowed != 0) {
-        conf.setInt("dfs.namenode.file.close.num-committed-allowed", config.numCommittedAllowed);
-      }
-      if (config.replication != null) {
-        conf.setInt(DFS_REPLICATION_KEY, config.replication);
+      conf.set(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY, System.getProperty("user.name"));
+
+      // ----------------------------------SSL configuration----------------------------------------
+      String cryptoDir = "";
+      boolean sslEnabled = false;
+      if (conf.getBoolean(CommonConfigurationKeysPublic.IPC_SERVER_SSL_ENABLED, false)) {
+        File confDir = new File(config.confDir);
+        cryptoDir = (new File(confDir, "certs")).toString();
+        prepareCryptoMaterial(cryptoDir);
+
+        conf.setEnum("hops.tls.rpc-acl-auth-mode", io.hops.security.HopsX509Authenticator.AUTH_MODE.NONE); // Disable auth checks for proxy users
+        setCryptoConfig(conf, cryptoDir);
+        sslEnabled = true;
       }
 
-      LOG.info("Building MiniDFSCluster...");
-      cluster = new MiniDFSCluster.Builder(conf)
-          .nameNodePort(NAMENODE_PORT)
-          .numDataNodes(NUM_DN)
-          .format(true)
-          .build();
+      // ----------------------------------Enable user impersonation for this user------------------
+      String currentUser = System.getProperty("user.name");
+      conf.set("hadoop.proxyuser." + currentUser + ".hosts", "*");
+      conf.set("hadoop.proxyuser." + currentUser + ".groups", "*");
 
+      System.out.println("Building MiniDFSCluster...");
+      MiniDFSCluster.Builder clusterBuilder = new MiniDFSCluster.Builder(conf)
+              .numDataNodes(NUM_DN);
+      if (cloudEnabled) {
+        clusterBuilder.storageTypes(CloudTestHelper.genStorageTypes(NUM_DN));
+      }
+
+      // Set up NN topology with ports: first NN uses NAMENODE_PORT, others use 0
+      int[] ipcPorts = new int[config.numNameNodes];
+      ipcPorts[0] = NAMENODE_PORT;
+      clusterBuilder.nnTopology(MiniDFSNNTopology.simpleHOPSTopology(config.numNameNodes, ipcPorts));
+
+      clusterBuilder = clusterBuilder.format(true);
+      cluster = clusterBuilder.build();
+
+      System.out.println("Cluster started successfully!");
+
+      // ----------------------------------Setup KMS------------------------------------------------
+      if (kmsEnabled) {
+        final HdfsAdmin dfsAdmin = new HdfsAdmin(cluster.getURI(), conf);
+        DFSTestUtil.createKey(TEST_KEY, cluster, conf);
+
+        final Path zone = new Path("/");
+        dfsAdmin.createEncryptionZone(zone, TEST_KEY);
+      }
+
+      // ----------------------------------Get file system clients----------------------------------
       FileSystem fs = cluster.getFileSystem(0);
       DistributedFileSystem dfs = (DistributedFileSystem) FileSystem
-          .newInstance(fs.getUri(), fs.getConf());
+              .newInstance(fs.getUri(), fs.getConf());
 
-      LOG.info("Cluster started successfully!");
+      // ----------------------------------Set storage policy---------------------------------------
+      if (cloudEnabled) {
+        dfs.setStoragePolicy(new Path("/"), "CLOUD");
+      } else {
+        dfs.setStoragePolicy(new Path("/"), "HOT");
+      }
 
-      // Set storage policy
-      dfs.setStoragePolicy(new Path("/"), "HOT");
 
-      // Create test directory
-      LOG.info("Creating test directory /_test...");
-      dfs.mkdirs(new Path("/_test"), new FsPermission(0777));
-      dfs.setPermission(new Path("/_test"), new FsPermission(0777));
+      // ----------------------------------Create sample data---------------------------------------
+      if (conf.getBoolean("create.test.data", false)) {
+
+        dfs.mkdirs(new Path("/_test"), new FsPermission(0777));
+        dfs.setPermission(new Path("/_test"), new FsPermission(0777));
+
+        InputStream in = Main.class.getClassLoader().getResourceAsStream("foo.txt");
+        if (in == null) {
+          throw new RuntimeException("Resource not found: foo.txt");
+        }
+        FSDataOutputStream out = dfs.create(new Path("/_test/foo.txt"));
+        IOUtils.copyBytes(in, out, 1024);
+        in.close();
+        out.close();
+
+        in = Main.class.getClassLoader().getResourceAsStream("mobydick.txt");
+        if (in == null) {
+          throw new RuntimeException("Resource not found: mobydick.txt");
+        }
+        out = dfs.create(new Path("/_test/mobydick.txt"),
+                false, 1024, (short) 3, 1024 * 1024);
+        IOUtils.copyBytes(in, out, 1024);
+        in.close();
+        out.close();
+      }
+
+      dfs.close();
 
       // Write HopsFS configuration files
       writeHopsFSConfig(cluster, config.confDir);
 
-      LOG.info("======================================");
-      LOG.info("HopsFS cluster is running!");
-      LOG.info("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
-      LOG.info("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
-      LOG.info("Configuration written to: " + config.confDir);
-      LOG.info("======================================");
-      LOG.info("Press Ctrl+C to shutdown...");
-
-      // Add shutdown hook
-      final MiniDFSCluster finalCluster = cluster;
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-        LOG.info("Shutting down cluster...");
-        if (finalCluster != null) {
-          finalCluster.shutdown();
-        }
-        LOG.info("Cluster shutdown complete.");
-      }));
+      System.out.println("================================================================================");
+      System.out.println("NameNode address: " + cluster.getNameNode(0).getHostAndPort());
+      System.out.println("HTTP address: " + cluster.getNameNode(0).getHttpAddress());
+      System.out.println("Configuration written to: " + config.confDir);
+      System.out.println("Cloud Enabled: " + cloudEnabled);
+      System.out.println("SSL Enabled: " + sslEnabled);
+      if (sslEnabled) {
+        System.out.println("SSL Crypt Dir: " + cryptoDir);
+      }
+      System.out.println("KMS Enabled: " + kmsEnabled);
+      if (kmsEnabled) {
+        System.out.println("KMS Provider: " + getKeyProviderURI(miniKMS));
+      }
+      System.out.println("================================================================================");
+      System.out.println("HopsFS cluster is running!");
+      System.out.println("Press Ctrl+C to shutdown...");
 
       // Keep the cluster running
       Thread.sleep(Long.MAX_VALUE);
 
     } catch (InterruptedException e) {
-      LOG.info("Cluster interrupted, shutting down...");
+      System.out.println("Cluster interrupted, shutting down...");
     } catch (Exception e) {
-      LOG.error("Error running HopsFS standalone cluster", e);
+      System.err.println("Error running HopsFS standalone cluster: " + e.getMessage());
       e.printStackTrace();
     } finally {
       if (cluster != null) {
@@ -265,16 +322,22 @@ public class Main {
     file.mkdirs();
 
     cluster.getConfiguration(0).set("fs.defaultFS",
-        "hdfs://" + cluster.getNameNode(0).getHostAndPort());
+            "hdfs://" + cluster.getNameNode(0).getHostAndPort());
 
     FileOutputStream os = new FileOutputStream(confDir + "/hdfs-site.xml");
-    cluster.getConfiguration(0).writeXml(os);
-    os.close();
+    try {
+      cluster.getConfiguration(0).writeXml(os);
+    } finally {
+      os.close();
+    }
 
     FileWriter writer = new FileWriter(confDir + "/hopsfs-uri.txt");
-    writer.write(cluster.getNameNode(0).getHostAndPort());
-    writer.close();
+    try {
+      writer.write(cluster.getNameNode(0).getHostAndPort());
+    } finally {
+      writer.close();
+    }
 
-    LOG.info("Configuration files written to " + confDir);
+    System.out.println("Configuration files written to " + confDir);
   }
 }
