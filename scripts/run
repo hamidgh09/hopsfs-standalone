@@ -4,16 +4,35 @@ SCRIPT_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 PROJECT_DIR="$SCRIPT_DIR/.."
 cd "$PROJECT_DIR"
 
-# Override JAVA_HOME if needed
+# The server jars are built with JDK 17 (main repo, HOPSFS-375), so the
+# standalone runs on the same JDK 17 the hops build functions use.
 export JAVA_HOME="${HOME}/usr/bin/jdk_for_hadoop"
 export PATH="${JAVA_HOME}/bin:$PATH"
+JAVA="$JAVA_HOME/bin/java"
 
-# Check Java version (must be <= 11)
-JAVA_VERSION=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
-if [ "$JAVA_VERSION" -gt 11 ]; then
-    echo "Error: Java version must be <= 11, found Java $JAVA_VERSION"
+# Require Java 17.
+JAVA_VERSION=$("$JAVA" -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
+if [ "$JAVA_VERSION" != "17" ]; then
+    echo "Error: JDK 17 required at $JAVA_HOME, found Java $JAVA_VERSION"
     exit 1
 fi
+
+# JDK 17 closes JPMS packages that Hadoop reflects into (UGI, metrics, NN/DN
+# internals). Open them for the cluster JVM, mirroring hadoop-project/pom.xml's
+# extraJavaTestArgs. Without these, MiniDFSCluster startup fails with
+# InaccessibleObjectException on JDK 17.
+JPMS_OPENS="-XX:+IgnoreUnrecognizedVMOptions \
+--add-opens=java.base/java.io=ALL-UNNAMED \
+--add-opens=java.base/java.lang=ALL-UNNAMED \
+--add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+--add-opens=java.base/java.math=ALL-UNNAMED \
+--add-opens=java.base/java.net=ALL-UNNAMED \
+--add-opens=java.base/java.text=ALL-UNNAMED \
+--add-opens=java.base/java.util=ALL-UNNAMED \
+--add-opens=java.base/java.util.concurrent=ALL-UNNAMED \
+--add-opens=java.base/java.util.zip=ALL-UNNAMED \
+--add-opens=java.base/sun.security.util=ALL-UNNAMED \
+--add-opens=java.base/sun.security.x509=ALL-UNNAMED"
 
 # Directory containing ndb-config.properties and hopsfs-site.xml (added to classpath)
 HOPSFS_CONF_DIR="$SCRIPT_DIR"
@@ -36,7 +55,9 @@ if [ ! -f "$JAR_FILE" ]; then
 fi
 
 # Run java in background, write to log file
-java -cp "$HOPSFS_CONF_DIR:$JAR_FILE" org.hops.Main \
+# ClusterJ loads libndbclient from java.library.path; mvn package unpacks the
+# platform's library into target/lib (DYLD_* variables would be stripped by macOS).
+"$JAVA" $JPMS_OPENS -Djava.library.path="$PROJECT_DIR/target/lib" -cp "$HOPSFS_CONF_DIR:$JAR_FILE" org.hops.Main \
     --conf-dir="$HOPSFS_OUTPUT_DIR/conf" \
     --dfs-base-dir="$HOPSFS_OUTPUT_DIR/data" \
     --num-namenodes=1 \

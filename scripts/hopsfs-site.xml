@@ -18,6 +18,15 @@
 
 <configuration>
 
+<!-- *************  Block Access Tokens ************* -->
+
+<property>
+   <name>dfs.block.access.token.enable</name>
+   <value>true</value>
+   <description>Enforce block access tokens between clients and DataNodes,
+   independently of the cluster-wide default.</description>
+</property>
+
 <!-- *************  Create Test Data ************* -->
 
 <property>
@@ -85,7 +94,22 @@
    <value>4</value>
    <description>Async-upload worker pool size. Distinct from
    dfs.dn.cloud.max.upload.threads (which is the cloud SDK's HTTP
-   transfer pool).</description>
+   transfer pool). Set to 1 to drain the upload queue slowly so blocks
+   sit COMPLETE+cloud_upload_pending longer — widens the in-flight
+   window for the storm-repro hunt (rename-OVERWRITE/delete racing a
+   still-pending block).</description>
+</property>
+
+<!-- Force the ASYNC upload-queue path (not the disk-pressure sync     -->
+<!-- fallback) so threads=1 above actually creates a backed-up queue    -->
+<!-- of COMPLETE+pending blocks. On this near-full host disk the        -->
+<!-- default 80% would make enqueue() upload synchronously (no pending  -->
+<!-- window). Safe now that the DN-death lock bug (S3 PUT under the      -->
+<!-- dataset monitor) is fixed; this is test amplification, not a mask. -->
+<property>
+   <name>dfs.dn.cloud.cache.delete.activation.percentage</name>
+   <value>99</value>
+   <description>Disk utilization percentage to start cleaning blocks from DN Cloud cache</description>
 </property>
 
 <property>
