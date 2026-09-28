@@ -44,8 +44,87 @@ java -jar target/hopsfs-standalone-1.0-SNAPSHOT.jar --num-datanodes=3 --namenode
   --conf-dir=PATH         Configuration output directory (default: /tmp/hopsfs-conf)
   --ndb-config=FILENAME   NDB configuration filename on classpath (default: ndb-config.properties)
   --dfs-base-dir=PATH     DFS data directory (default: /tmp/hopsfs-data)
+  --ctl-port=N            Loopback control socket port (default: 7777; 0 to disable)
   -h, --help              Show this help message
 ```
+
+### Interactive control socket (kill / start nodes by hand)
+
+By default the cluster opens a plain-text control socket on
+`127.0.0.1:7777`. Drive it from a separate terminal so the cluster's
+NN/DN log stream stays on its own console:
+
+```bash
+# Interactive session
+nc localhost 7777
+hopsfs-ctl ready. Type 'help'.
+help
+list
+kill dn 0
+start dn 0
+kill nn 1
+start nn 1
+quit
+
+# One-shot
+echo "list" | nc localhost 7777
+echo "kill dn 0" | nc localhost 7777
+```
+
+Commands:
+
+- `help` — show commands
+- `list` — show NN/DN status (which are running, which are stopped)
+- `kill {dn|nn} <idx>` — stop a node. DN stop preserves the data dir
+  and port info so `start dn <idx>` brings the same instance back.
+- `start {dn|nn} <idx>` — start a previously stopped node.
+- `quit` — close just this connection; the cluster keeps running.
+
+When the control socket is enabled (the default), the cluster overrides
+the heartbeat tunables so the NameNode expires a dead DataNode in
+~20 seconds (`dfs.heartbeat.interval=1s`,
+`dfs.namenode.heartbeat.recheck-interval=5000ms`). Without this you'd
+wait ~10.5 minutes after `kill dn` before the NN noticed. Pass
+`--ctl-port=0` to disable the socket and keep stock Hadoop heartbeat
+behavior.
+
+The socket binds to `127.0.0.1` only — not reachable from outside the
+host. It's intended for local development and testing.
+
+### Helper scripts
+
+Three wrappers under `scripts/` save you the typing:
+
+| Script | Purpose |
+|---|---|
+| `scripts/hopsfs-ctl.sh` | Interactive launcher. Prints a usage banner with all supported commands, then exec's `nc localhost 7777`. Use this for ad-hoc `kill`/`start`/`list`. |
+| `scripts/hopsfs-churn-dn.sh [interval-secs] [dn-idx]` | Periodic DataNode churn loop. Defaults: 60 s phases, DN 0. Cycles `kill dn` → sleep → `start dn` → sleep. When async cloud upload is on, the runner drains the DN before stopping it. |
+| `scripts/hopsfs-churn-nn.sh [interval-secs] [nn-idx]` | Periodic NameNode churn loop. Defaults: 60 s phases, NN 0. Same shape as the DN variant; no drain step (drain is DN-only). |
+
+Each script prints a detailed banner — target host/port, what the loop
+does, prerequisites, env overrides — before doing anything network. All
+three honor `HOPSFS_CTL_HOST` and `HOPSFS_CTL_PORT` so you can point
+them at a non-default port.
+
+Examples:
+
+```bash
+# Interactive
+./scripts/hopsfs-ctl.sh
+
+# DN0 dies every 60 s for 60 s, then comes back; repeat forever
+./scripts/hopsfs-churn-dn.sh
+
+# 30-second phases, target DN1
+./scripts/hopsfs-churn-dn.sh 30 1
+
+# NN1 churn at 30-second phases
+./scripts/hopsfs-churn-nn.sh 30 1
+```
+
+For NN churn you need `--num-namenodes >= 2` so clients can fail over;
+for DN churn you need `--num-datanodes >= 2` so writes can still find a
+healthy target while the churned DN is down.
 
 ## NDB Configuration
 
